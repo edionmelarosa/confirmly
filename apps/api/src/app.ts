@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
+import cors from "@fastify/cors";
 import { prisma } from "@confirmly/db";
 import type { Env } from "./env";
 import { registerAuthRoutes } from "./auth/routes";
@@ -11,6 +12,10 @@ export function buildApp(env: Env): FastifyInstance {
     logger: true,
   });
 
+  app.register(cors, {
+    origin: env.WEB_ORIGIN,
+    credentials: true,
+  });
   app.register(cookie);
 
   app.get("/health", async (_request, reply) => {
