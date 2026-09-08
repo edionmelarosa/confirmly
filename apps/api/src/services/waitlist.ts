@@ -58,12 +58,7 @@ async function findNextMatchingEntry(slot: AppointmentSlot): Promise<WaitlistEnt
 }
 
 export function createWaitlistService(env: Env, smsService: SmsService) {
-  async function checkWaitlistFill(slot: AppointmentSlot): Promise<void> {
-    const entry = await findNextMatchingEntry(slot);
-    if (!entry) {
-      return;
-    }
-
+  async function sendOffer(entry: WaitlistEntry, slot: AppointmentSlot): Promise<void> {
     const patient = await prisma.patient.findUniqueOrThrow({ where: { id: entry.patientId } });
 
     await prisma.waitlistEntry.update({
@@ -89,7 +84,26 @@ export function createWaitlistService(env: Env, smsService: SmsService) {
     });
   }
 
-  return { createWaitlistEntry, listWaitlistEntries, checkWaitlistFill };
+  async function checkWaitlistFill(slot: AppointmentSlot): Promise<void> {
+    const entry = await findNextMatchingEntry(slot);
+    if (!entry) {
+      return;
+    }
+    await sendOffer(entry, slot);
+  }
+
+  async function sendWaitlistOfferNow(entryId: string, slot: AppointmentSlot): Promise<WaitlistEntry | null> {
+    const entry = await prisma.waitlistEntry.findFirst({
+      where: { id: entryId, status: "waiting" },
+    });
+    if (!entry) {
+      return null;
+    }
+    await sendOffer(entry, slot);
+    return entry;
+  }
+
+  return { createWaitlistEntry, listWaitlistEntries, checkWaitlistFill, sendWaitlistOfferNow };
 }
 
 export type WaitlistService = ReturnType<typeof createWaitlistService>;

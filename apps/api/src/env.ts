@@ -8,7 +8,7 @@ const envSchema = z.object({
   WEB_ORIGIN: z.string().min(1).default("http://localhost:3000"),
   SEMAPHORE_API_KEY: z.string().min(1, "SEMAPHORE_API_KEY is required"),
   SEMAPHORE_SENDER_NAME: z.string().optional(),
-  REMINDER_LEAD_HOURS: z.coerce.number().int().positive().default(24),
+  SENTRY_DSN: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

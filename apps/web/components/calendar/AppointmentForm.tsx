@@ -17,6 +17,7 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
   const [patientPhone, setPatientPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [resendConfirmed, setResendConfirmed] = useState(false);
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -61,6 +62,34 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
     }
   }
 
+  async function handleStatusOverride(status: "confirmed" | "no_show") {
+    if (!existing) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await apiClient.patch(`/appointments/${existing.id}`, { status });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleResendReminder() {
+    if (!existing) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await apiClient.post(`/appointments/${existing.id}/resend-reminder`);
+      setResendConfirmed(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div
       role="dialog"
@@ -83,7 +112,23 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <p>Status: {existing.status}</p>
             {error && <p style={{ color: "crimson" }}>{error}</p>}
-            <div style={{ display: "flex", gap: 8 }}>
+            {resendConfirmed && <p style={{ color: "green" }}>Reminder resent.</p>}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                onClick={() => handleStatusOverride("confirmed")}
+                disabled={submitting || existing.status === "confirmed"}
+              >
+                Force confirm
+              </button>
+              <button
+                onClick={() => handleStatusOverride("no_show")}
+                disabled={submitting || existing.status === "no_show"}
+              >
+                Mark no-show
+              </button>
+              <button onClick={handleResendReminder} disabled={submitting || existing.status === "cancelled"}>
+                Resend reminder now
+              </button>
               <button onClick={handleCancel} disabled={submitting || existing.status === "cancelled"}>
                 Cancel appointment
               </button>

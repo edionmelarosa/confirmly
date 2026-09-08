@@ -1,6 +1,7 @@
-import Fastify, { FastifyInstance } from "fastify";
+import Fastify, { FastifyInstance, FastifyError } from "fastify";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
+import * as Sentry from "@sentry/node";
 import { prisma } from "@confirmly/db";
 import type { Env } from "./env";
 import { registerAuthRoutes } from "./auth/routes";
@@ -9,6 +10,7 @@ import { registerPatientRoutes } from "./routes/patients";
 import { registerSmsWebhookRoutes } from "./routes/webhooks-sms";
 import { registerPatientSessionRoutes } from "./routes/patient-session";
 import { registerWaitlistRoutes } from "./routes/waitlist";
+import { registerClinicSettingsRoutes } from "./routes/clinic-settings";
 import { createInboundSmsHandler } from "./services/inbound-sms";
 import { createWaitlistService } from "./services/waitlist";
 import type { SmsService } from "./services/sms";
@@ -24,6 +26,16 @@ export function buildApp(env: Env, smsService: SmsService): FastifyInstance {
   });
   app.register(cookie);
 
+  app.setErrorHandler((error: FastifyError, request, reply) => {
+    Sentry.captureException(error);
+    app.log.error(error);
+    const statusCode = error.statusCode ?? 500;
+    return reply.code(statusCode).send({
+      error: "internal_error",
+      message: statusCode === 500 ? "Something went wrong" : error.message,
+    });
+  });
+
   app.get("/health", async (_request, reply) => {
     await prisma.$queryRaw`SELECT 1`;
     return reply.send({ status: "ok", env: env.NODE_ENV });
@@ -33,11 +45,12 @@ export function buildApp(env: Env, smsService: SmsService): FastifyInstance {
   const inboundSmsHandler = createInboundSmsHandler(env, smsService, waitlistService);
 
   registerAuthRoutes(app);
-  app.register(async (instance) => registerAppointmentRoutes(instance, waitlistService));
+  app.register(async (instance) => registerAppointmentRoutes(instance, waitlistService, smsService));
   app.register(async (instance) => registerPatientRoutes(instance));
   app.register(async (instance) => registerSmsWebhookRoutes(instance, inboundSmsHandler));
   app.register(async (instance) => registerPatientSessionRoutes(instance, smsService));
   app.register(async (instance) => registerWaitlistRoutes(instance, waitlistService));
+  app.register(async (instance) => registerClinicSettingsRoutes(instance));
 
   return app;
 }

@@ -1,3 +1,4 @@
+import "./instrument";
 import { loadEnv } from "./env";
 import { buildApp } from "./app";
 import { createSmsService } from "./services/sms";
@@ -11,7 +12,7 @@ app
   .listen({ port: env.PORT, host: "0.0.0.0" })
   .then((address) => {
     app.log.info(`confirmly api listening on ${address}`);
-    startReminderDispatchJob(env, smsService);
+    startReminderDispatchJob(smsService);
   })
   .catch((err) => {
     app.log.error(err);

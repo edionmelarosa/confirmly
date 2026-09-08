@@ -1,8 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { prisma } from "@confirmly/db";
 import { requireAuth } from "../auth/guard";
 import { appointmentsService, DoubleBookingError } from "../services/appointments";
 import { slotFromAppointment, type WaitlistService } from "../services/waitlist";
+import type { SmsService } from "../services/sms";
+import { renderReminderSms } from "../templates/sms";
 
 const createSchema = z.object({
   patientId: z.string().min(1),
@@ -19,7 +22,11 @@ const updateSchema = z.object({
   status: z.enum(["scheduled", "confirmed", "cancelled", "no_show", "completed"]).optional(),
 });
 
-export function registerAppointmentRoutes(app: FastifyInstance, waitlistService: WaitlistService): void {
+export function registerAppointmentRoutes(
+  app: FastifyInstance,
+  waitlistService: WaitlistService,
+  smsService: SmsService,
+): void {
   app.addHook("preHandler", requireAuth);
 
   app.post("/appointments", async (request, reply) => {
@@ -93,5 +100,33 @@ export function registerAppointmentRoutes(app: FastifyInstance, waitlistService:
     }
     await waitlistService.checkWaitlistFill(slotFromAppointment(cancelled));
     return reply.send(cancelled);
+  });
+
+  app.post<{ Params: { id: string } }>("/appointments/:id/resend-reminder", async (request, reply) => {
+    const clinicId = request.staffUser!.clinicId;
+    const appointment = await appointmentsService.getAppointment(clinicId, request.params.id);
+    if (!appointment) {
+      return reply.code(404).send({ error: "not_found", message: "Appointment not found" });
+    }
+
+    const [clinic, patient] = await Promise.all([
+      prisma.clinic.findUniqueOrThrow({ where: { id: clinicId } }),
+      prisma.patient.findUniqueOrThrow({ where: { id: appointment.patientId } }),
+    ]);
+
+    const body = renderReminderSms({
+      clinicName: clinic.name,
+      clinicTimezone: clinic.timezone,
+      startsAt: appointment.startsAt,
+    });
+
+    const result = await smsService.send({
+      clinicId,
+      to: patient.phone,
+      body,
+      appointmentId: appointment.id,
+    });
+
+    return reply.send({ sent: result.success, providerStatus: result.providerStatus });
   });
 }

@@ -12,6 +12,7 @@ model Clinic {
   name               String
   timezone           String
   smsSenderName      String   @map("sms_sender_name")
+  reminderLeadHours  Int      @default(24) @map("reminder_lead_hours")
   subscriptionStatus String   @map("subscription_status")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")

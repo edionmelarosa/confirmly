@@ -12,6 +12,7 @@ export default function WaitlistPage() {
   const [desiredEnd, setDesiredEnd] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [offeringId, setOfferingId] = useState<string | null>(null);
 
   const fetchEntries = useCallback(async () => {
     try {
@@ -52,6 +53,22 @@ export default function WaitlistPage() {
       setError(err instanceof ApiError ? err.message : "Something went wrong");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleSendOfferNow(entry: WaitlistEntryDto) {
+    setOfferingId(entry.id);
+    setError(null);
+    try {
+      await apiClient.post(`/waitlist/${entry.id}/send-offer`, {
+        startsAt: entry.desiredStart,
+        endsAt: entry.desiredEnd,
+      });
+      await fetchEntries();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setOfferingId(null);
     }
   }
 
@@ -103,6 +120,7 @@ export default function WaitlistPage() {
             <th style={{ border: "1px solid #e5e5e5", padding: 8, textAlign: "left" }}>Desired range</th>
             <th style={{ border: "1px solid #e5e5e5", padding: 8, textAlign: "left" }}>Status</th>
             <th style={{ border: "1px solid #e5e5e5", padding: 8, textAlign: "left" }}>Added</th>
+            <th style={{ border: "1px solid #e5e5e5", padding: 8, textAlign: "left" }}></th>
           </tr>
         </thead>
         <tbody>
@@ -114,6 +132,13 @@ export default function WaitlistPage() {
               <td style={{ border: "1px solid #e5e5e5", padding: 8 }}>{entry.status}</td>
               <td style={{ border: "1px solid #e5e5e5", padding: 8 }}>
                 {new Date(entry.createdAt).toLocaleDateString()}
+              </td>
+              <td style={{ border: "1px solid #e5e5e5", padding: 8 }}>
+                {entry.status === "waiting" && (
+                  <button onClick={() => handleSendOfferNow(entry)} disabled={offeringId === entry.id}>
+                    {offeringId === entry.id ? "Sending..." : "Send offer now"}
+                  </button>
+                )}
               </td>
             </tr>
           ))}
