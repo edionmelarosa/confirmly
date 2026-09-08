@@ -6,6 +6,9 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   SESSION_SECRET: z.string().min(1, "SESSION_SECRET is required"),
   WEB_ORIGIN: z.string().min(1).default("http://localhost:3000"),
+  SEMAPHORE_API_KEY: z.string().min(1, "SEMAPHORE_API_KEY is required"),
+  SEMAPHORE_SENDER_NAME: z.string().optional(),
+  REMINDER_LEAD_HOURS: z.coerce.number().int().positive().default(24),
 });
 
 export type Env = z.infer<typeof envSchema>;

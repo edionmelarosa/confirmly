@@ -11,15 +11,18 @@
   "dependencies": {
     "@confirmly/db": "workspace:*",
     "@confirmly/shared-types": "workspace:*",
+    "@confirmly/sms": "workspace:*",
     "@fastify/cookie": "^11.0.1",
     "@fastify/cors": "^10.0.1",
     "@node-rs/argon2": "^2.0.2",
     "fastify": "^5.1.0",
+    "node-cron": "^3.0.3",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@confirmly/config": "workspace:*",
     "@types/node": "^22.10.0",
+    "@types/node-cron": "^3.0.11",
     "tsx": "^4.19.2",
     "typescript": "^5.7.0"
   }
