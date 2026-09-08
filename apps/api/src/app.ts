@@ -3,6 +3,7 @@ import cookie from "@fastify/cookie";
 import { prisma } from "@confirmly/db";
 import type { Env } from "./env";
 import { registerAuthRoutes } from "./auth/routes";
+import { registerAppointmentRoutes } from "./routes/appointments";
 
 export function buildApp(env: Env): FastifyInstance {
   const app = Fastify({
@@ -17,6 +18,7 @@ export function buildApp(env: Env): FastifyInstance {
   });
 
   registerAuthRoutes(app);
+  app.register(async (instance) => registerAppointmentRoutes(instance));
 
   return app;
 }
