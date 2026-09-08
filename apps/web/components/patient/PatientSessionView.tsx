@@ -53,7 +53,7 @@ export function PatientSessionView({ token }: PatientSessionViewProps) {
   if (state.status === "claimed") {
     return (
       <div className="text-center">
-        <p className="text-lg font-medium text-green-700">You're booked!</p>
+        <p className="text-lg font-medium text-green-700">You&apos;re booked!</p>
         <p className="mt-2 text-neutral-600">A confirmation SMS has been sent to your phone.</p>
       </div>
     );
