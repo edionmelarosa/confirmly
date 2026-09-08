@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: confirmly-postgres
+    environment:
+      POSTGRES_USER: confirmly
+      POSTGRES_PASSWORD: confirmly
+      POSTGRES_DB: confirmly
+    ports:
+      - "5433:5432"
+    volumes:
+      - confirmly-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  confirmly-postgres-data:
