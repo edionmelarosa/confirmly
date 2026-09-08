@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Clinic {
+  id                  String   @id @default(cuid())
+  name                String
+  timezone            String
+  smsSenderName       String   @map("sms_sender_name")
+  subscriptionStatus  String   @map("subscription_status")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  staffUsers      StaffUser[]
+  patients        Patient[]
+  appointments    Appointment[]
+  waitlistEntries WaitlistEntry[]
+  smsLogs         SmsLog[]
+
+  @@map("clinics")
+}
+
+model StaffUser {
+  id           String   @id @default(cuid())
+  clinicId     String   @map("clinic_id")
+  email        String
+  passwordHash String   @map("password_hash")
+  role         String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  clinic   Clinic    @relation(fields: [clinicId], references: [id])
+  sessions Session[]
+
+  @@unique([clinicId, email])
+  @@map("staff_users")
+}
+
+model Session {
+  id        String   @id
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+
+  user StaffUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Patient {
+  id        String   @id @default(cuid())
+  clinicId  String   @map("clinic_id")
+  name      String
+  phone     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  clinic          Clinic          @relation(fields: [clinicId], references: [id])
+  appointments    Appointment[]
+  waitlistEntries WaitlistEntry[]
+
+  @@unique([clinicId, phone])
+  @@map("patients")
+}
+
+enum AppointmentStatus {
+  scheduled
+  confirmed
+  cancelled
+  no_show
+  completed
+}
+
+model Appointment {
+  id              String            @id @default(cuid())
+  clinicId        String            @map("clinic_id")
+  patientId       String            @map("patient_id")
+  resourceId      String?           @map("resource_id")
+  startsAt        DateTime          @map("starts_at") @db.Timestamptz(3)
+  endsAt          DateTime          @map("ends_at") @db.Timestamptz(3)
+  status          AppointmentStatus @default(scheduled)
+  reminderSentAt  DateTime?         @map("reminder_sent_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  clinic  Clinic   @relation(fields: [clinicId], references: [id])
+  patient Patient  @relation(fields: [patientId], references: [id])
+  smsLogs SmsLog[]
+
+  @@index([clinicId, resourceId, startsAt])
+  @@map("appointments")
+}
+
+enum WaitlistStatus {
+  waiting
+  offered
+  claimed
+  expired
+  cancelled
+}
+
+model WaitlistEntry {
+  id           String         @id @default(cuid())
+  clinicId     String         @map("clinic_id")
+  patientId    String         @map("patient_id")
+  desiredStart DateTime       @map("desired_start")
+  desiredEnd   DateTime       @map("desired_end")
+  status       WaitlistStatus @default(waiting)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  clinic  Clinic  @relation(fields: [clinicId], references: [id])
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("waitlist_entries")
+}
+
+enum SmsDirection {
+  in
+  out
+}
+
+model SmsLog {
+  id                 String       @id @default(cuid())
+  clinicId           String       @map("clinic_id")
+  direction          SmsDirection
+  appointmentId      String?      @map("appointment_id")
+  phone              String
+  body               String
+  providerStatus     String       @map("provider_status")
+  providerMessageId  String?      @map("provider_message_id")
+  createdAt          DateTime     @default(now()) @map("created_at")
+
+  clinic      Clinic       @relation(fields: [clinicId], references: [id])
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+
+  @@map("sms_logs")
+}
