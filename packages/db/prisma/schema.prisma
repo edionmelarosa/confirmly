@@ -105,14 +105,17 @@ enum WaitlistStatus {
 }
 
 model WaitlistEntry {
-  id           String         @id @default(cuid())
-  clinicId     String         @map("clinic_id")
-  patientId    String         @map("patient_id")
-  desiredStart DateTime       @map("desired_start")
-  desiredEnd   DateTime       @map("desired_end")
-  status       WaitlistStatus @default(waiting)
-  createdAt    DateTime       @default(now()) @map("created_at")
-  updatedAt    DateTime       @updatedAt @map("updated_at")
+  id                String         @id @default(cuid())
+  clinicId          String         @map("clinic_id")
+  patientId         String         @map("patient_id")
+  desiredStart      DateTime       @map("desired_start")
+  desiredEnd        DateTime       @map("desired_end")
+  status            WaitlistStatus @default(waiting)
+  offeredResourceId String?        @map("offered_resource_id")
+  offeredSlotStart  DateTime?      @map("offered_slot_start")
+  offeredSlotEnd    DateTime?      @map("offered_slot_end")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
 
   clinic       Clinic        @relation(fields: [clinicId], references: [id])
   patient      Patient       @relation(fields: [patientId], references: [id])

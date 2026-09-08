@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@confirmly/db";
-import type { AvailableSlotDto, PatientSessionResponse } from "@confirmly/shared-types";
+import type { AvailableSlotDto, PatientSessionResponse, WaitlistClaimResponse } from "@confirmly/shared-types";
 import type { SmsService } from "../services/sms";
 import { resolveAccessToken, markAccessTokenUsed } from "../services/tokens";
 import { appointmentsService, DoubleBookingError } from "../services/appointments";
@@ -65,6 +65,29 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
     }
 
     const record = resolved.record!;
+
+    if (record.purpose === "waitlist_claim") {
+      if (!record.waitlistEntryId) {
+        return reply.code(410).send({ error: "gone", message: "This link is no longer valid" });
+      }
+
+      const entry = await prisma.waitlistEntry.findUnique({
+        where: { id: record.waitlistEntryId },
+        include: { clinic: true },
+      });
+      if (!entry || entry.status !== "offered") {
+        return reply.code(410).send({ error: "gone", message: "This offer is no longer available" });
+      }
+
+      const response: PatientSessionResponse = {
+        purpose: "waitlist_claim",
+        clinic: { name: entry.clinic.name, timezone: entry.clinic.timezone },
+        desiredStart: entry.desiredStart.toISOString(),
+        desiredEnd: entry.desiredEnd.toISOString(),
+      };
+      return reply.send(response);
+    }
+
     if (!record.appointmentId) {
       return reply.code(410).send({ error: "gone", message: "This link is no longer valid" });
     }
@@ -78,6 +101,7 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
     }
 
     const response: PatientSessionResponse = {
+      purpose: "reschedule",
       appointment: {
         id: appointment.id,
         startsAt: appointment.startsAt.toISOString(),
@@ -88,7 +112,6 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
         name: appointment.clinic.name,
         timezone: appointment.clinic.timezone,
       },
-      purpose: record.purpose,
     };
 
     return reply.send(response);
@@ -158,6 +181,71 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
     } catch (err) {
       if (err instanceof DoubleBookingError) {
         return reply.code(409).send({ error: "double_booking", message: err.message });
+      }
+      throw err;
+    }
+  });
+
+  app.post<{ Params: { token: string } }>("/api/patient/session/:token/claim", async (request, reply) => {
+    const resolved = await resolveAccessToken(request.params.token);
+    const record = resolved.record;
+    if (resolved.state !== "valid" || record?.purpose !== "waitlist_claim" || !record.waitlistEntryId) {
+      return reply.code(410).send({ error: "gone", message: "This link has expired or was already used" });
+    }
+
+    const waitlistEntryId = record.waitlistEntryId;
+
+    // Atomic first-to-confirm-wins: only one concurrent request can flip offered -> claimed.
+    const claim = await prisma.waitlistEntry.updateMany({
+      where: { id: waitlistEntryId, status: "offered" },
+      data: { status: "claimed" },
+    });
+
+    if (claim.count === 0) {
+      return reply.code(410).send({ error: "gone", message: "This slot is no longer available" });
+    }
+
+    const entry = await prisma.waitlistEntry.findUniqueOrThrow({
+      where: { id: waitlistEntryId },
+      include: { clinic: true, patient: true },
+    });
+
+    if (!entry.offeredSlotStart || !entry.offeredSlotEnd) {
+      return reply.code(410).send({ error: "gone", message: "This slot is no longer available" });
+    }
+
+    try {
+      const appointment = await appointmentsService.createAppointment({
+        clinicId: entry.clinicId,
+        patientId: entry.patientId,
+        resourceId: entry.offeredResourceId,
+        startsAt: entry.offeredSlotStart,
+        endsAt: entry.offeredSlotEnd,
+      });
+
+      await markAccessTokenUsed(record.id);
+
+      await smsService.send({
+        clinicId: entry.clinicId,
+        to: entry.patient.phone,
+        body: `You're booked! Your appointment is confirmed for ${appointment.startsAt.toLocaleString("en-PH", {
+          timeZone: entry.clinic.timezone,
+        })}.`,
+        appointmentId: appointment.id,
+      });
+
+      const response: WaitlistClaimResponse = {
+        id: appointment.id,
+        startsAt: appointment.startsAt.toISOString(),
+        endsAt: appointment.endsAt.toISOString(),
+        status: appointment.status,
+      };
+      return reply.send(response);
+    } catch (err) {
+      if (err instanceof DoubleBookingError) {
+        // Slot got taken by a direct booking before we could claim it; revert the entry so it isn't stuck as claimed.
+        await prisma.waitlistEntry.update({ where: { id: entry.id }, data: { status: "expired" } });
+        return reply.code(409).send({ error: "double_booking", message: "This slot was just taken" });
       }
       throw err;
     }

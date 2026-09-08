@@ -10,11 +10,20 @@ export interface PatientSessionClinicDto {
   timezone: string;
 }
 
-export interface PatientSessionResponse {
+export interface RescheduleSessionResponse {
+  purpose: "reschedule";
   appointment: PatientSessionAppointmentDto;
   clinic: PatientSessionClinicDto;
-  purpose: "reschedule" | "waitlist_claim";
 }
+
+export interface WaitlistClaimSessionResponse {
+  purpose: "waitlist_claim";
+  clinic: PatientSessionClinicDto;
+  desiredStart: string;
+  desiredEnd: string;
+}
+
+export type PatientSessionResponse = RescheduleSessionResponse | WaitlistClaimSessionResponse;
 
 export interface AvailableSlotDto {
   startsAt: string;
@@ -24,4 +33,11 @@ export interface AvailableSlotDto {
 export interface RescheduleRequest {
   startsAt: string;
   endsAt: string;
+}
+
+export interface WaitlistClaimResponse {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  status: string;
 }

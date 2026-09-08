@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/guard";
 import { appointmentsService, DoubleBookingError } from "../services/appointments";
+import { slotFromAppointment, type WaitlistService } from "../services/waitlist";
 
 const createSchema = z.object({
   patientId: z.string().min(1),
@@ -18,7 +19,7 @@ const updateSchema = z.object({
   status: z.enum(["scheduled", "confirmed", "cancelled", "no_show", "completed"]).optional(),
 });
 
-export function registerAppointmentRoutes(app: FastifyInstance): void {
+export function registerAppointmentRoutes(app: FastifyInstance, waitlistService: WaitlistService): void {
   app.addHook("preHandler", requireAuth);
 
   app.post("/appointments", async (request, reply) => {
@@ -90,6 +91,7 @@ export function registerAppointmentRoutes(app: FastifyInstance): void {
     if (!cancelled) {
       return reply.code(404).send({ error: "not_found", message: "Appointment not found" });
     }
+    await waitlistService.checkWaitlistFill(slotFromAppointment(cancelled));
     return reply.send(cancelled);
   });
 }

@@ -7,6 +7,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <strong>Confirmly</strong>
         <Link href="/dashboard">Dashboard</Link>
         <Link href="/dashboard/appointments">Appointments</Link>
+        <Link href="/dashboard/waitlist">Waitlist</Link>
       </nav>
       <main style={{ padding: 24 }}>{children}</main>
     </div>

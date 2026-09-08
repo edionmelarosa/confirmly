@@ -2,7 +2,7 @@ import { prisma, type Patient } from "@confirmly/db";
 import type { Env } from "../env";
 import type { SmsService } from "./sms";
 import { createAccessToken } from "./tokens";
-import { checkWaitlistFill, slotFromAppointment } from "./waitlist";
+import { slotFromAppointment, type WaitlistService } from "./waitlist";
 
 export interface InboundSmsParams {
   phone: string;
@@ -32,7 +32,7 @@ async function findPendingAppointment(patientId: string, clinicId: string) {
   });
 }
 
-export function createInboundSmsHandler(env: Env, smsService: SmsService) {
+export function createInboundSmsHandler(env: Env, smsService: SmsService, waitlistService: WaitlistService) {
   async function handleInboundSms(params: InboundSmsParams): Promise<void> {
     const { phone, body, patient } = params;
     const keyword = parseKeyword(body);
@@ -72,7 +72,7 @@ export function createInboundSmsHandler(env: Env, smsService: SmsService) {
           body: "Your appointment has been cancelled.",
           appointmentId: appointment.id,
         });
-        await checkWaitlistFill(slotFromAppointment(cancelled));
+        await waitlistService.checkWaitlistFill(slotFromAppointment(cancelled));
         return;
       }
       case "reschedule": {

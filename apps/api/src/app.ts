@@ -8,7 +8,9 @@ import { registerAppointmentRoutes } from "./routes/appointments";
 import { registerPatientRoutes } from "./routes/patients";
 import { registerSmsWebhookRoutes } from "./routes/webhooks-sms";
 import { registerPatientSessionRoutes } from "./routes/patient-session";
+import { registerWaitlistRoutes } from "./routes/waitlist";
 import { createInboundSmsHandler } from "./services/inbound-sms";
+import { createWaitlistService } from "./services/waitlist";
 import type { SmsService } from "./services/sms";
 
 export function buildApp(env: Env, smsService: SmsService): FastifyInstance {
@@ -27,13 +29,15 @@ export function buildApp(env: Env, smsService: SmsService): FastifyInstance {
     return reply.send({ status: "ok", env: env.NODE_ENV });
   });
 
-  const inboundSmsHandler = createInboundSmsHandler(env, smsService);
+  const waitlistService = createWaitlistService(env, smsService);
+  const inboundSmsHandler = createInboundSmsHandler(env, smsService, waitlistService);
 
   registerAuthRoutes(app);
-  app.register(async (instance) => registerAppointmentRoutes(instance));
+  app.register(async (instance) => registerAppointmentRoutes(instance, waitlistService));
   app.register(async (instance) => registerPatientRoutes(instance));
   app.register(async (instance) => registerSmsWebhookRoutes(instance, inboundSmsHandler));
   app.register(async (instance) => registerPatientSessionRoutes(instance, smsService));
+  app.register(async (instance) => registerWaitlistRoutes(instance, waitlistService));
 
   return app;
 }
