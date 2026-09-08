@@ -4,6 +4,7 @@ import { prisma } from "@confirmly/db";
 import type { Env } from "./env";
 import { registerAuthRoutes } from "./auth/routes";
 import { registerAppointmentRoutes } from "./routes/appointments";
+import { registerPatientRoutes } from "./routes/patients";
 
 export function buildApp(env: Env): FastifyInstance {
   const app = Fastify({
@@ -19,6 +20,7 @@ export function buildApp(env: Env): FastifyInstance {
 
   registerAuthRoutes(app);
   app.register(async (instance) => registerAppointmentRoutes(instance));
+  app.register(async (instance) => registerPatientRoutes(instance));
 
   return app;
 }
