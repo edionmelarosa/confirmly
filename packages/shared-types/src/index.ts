@@ -4,3 +4,4 @@ export interface ApiErrorResponse {
 }
 
 export * from "./appointment";
+export * from "./patient-session";

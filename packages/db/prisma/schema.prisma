@@ -8,13 +8,13 @@ datasource db {
 }
 
 model Clinic {
-  id                  String   @id @default(cuid())
-  name                String
-  timezone            String
-  smsSenderName       String   @map("sms_sender_name")
-  subscriptionStatus  String   @map("subscription_status")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(cuid())
+  name               String
+  timezone           String
+  smsSenderName      String   @map("sms_sender_name")
+  subscriptionStatus String   @map("subscription_status")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   staffUsers      StaffUser[]
   patients        Patient[]
@@ -76,20 +76,21 @@ enum AppointmentStatus {
 }
 
 model Appointment {
-  id              String            @id @default(cuid())
-  clinicId        String            @map("clinic_id")
-  patientId       String            @map("patient_id")
-  resourceId      String?           @map("resource_id")
-  startsAt        DateTime          @map("starts_at") @db.Timestamptz(3)
-  endsAt          DateTime          @map("ends_at") @db.Timestamptz(3)
-  status          AppointmentStatus @default(scheduled)
-  reminderSentAt  DateTime?         @map("reminder_sent_at")
-  createdAt       DateTime          @default(now()) @map("created_at")
-  updatedAt       DateTime          @updatedAt @map("updated_at")
+  id             String            @id @default(cuid())
+  clinicId       String            @map("clinic_id")
+  patientId      String            @map("patient_id")
+  resourceId     String?           @map("resource_id")
+  startsAt       DateTime          @map("starts_at") @db.Timestamptz(3)
+  endsAt         DateTime          @map("ends_at") @db.Timestamptz(3)
+  status         AppointmentStatus @default(scheduled)
+  reminderSentAt DateTime?         @map("reminder_sent_at")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
 
-  clinic  Clinic   @relation(fields: [clinicId], references: [id])
-  patient Patient  @relation(fields: [patientId], references: [id])
-  smsLogs SmsLog[]
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  patient      Patient       @relation(fields: [patientId], references: [id])
+  smsLogs      SmsLog[]
+  accessTokens AccessToken[]
 
   @@index([clinicId, resourceId, startsAt])
   @@map("appointments")
@@ -113,10 +114,32 @@ model WaitlistEntry {
   createdAt    DateTime       @default(now()) @map("created_at")
   updatedAt    DateTime       @updatedAt @map("updated_at")
 
-  clinic  Clinic  @relation(fields: [clinicId], references: [id])
-  patient Patient @relation(fields: [patientId], references: [id])
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  patient      Patient       @relation(fields: [patientId], references: [id])
+  accessTokens AccessToken[]
 
   @@map("waitlist_entries")
+}
+
+enum AccessTokenPurpose {
+  reschedule
+  waitlist_claim
+}
+
+model AccessToken {
+  id              String             @id @default(cuid())
+  tokenHash       String             @unique @map("token_hash")
+  purpose         AccessTokenPurpose
+  appointmentId   String?            @map("appointment_id")
+  waitlistEntryId String?            @map("waitlist_entry_id")
+  expiresAt       DateTime           @map("expires_at")
+  usedAt          DateTime?          @map("used_at")
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  appointment   Appointment?   @relation(fields: [appointmentId], references: [id])
+  waitlistEntry WaitlistEntry? @relation(fields: [waitlistEntryId], references: [id])
+
+  @@map("access_tokens")
 }
 
 enum SmsDirection {
@@ -125,15 +148,15 @@ enum SmsDirection {
 }
 
 model SmsLog {
-  id                 String       @id @default(cuid())
-  clinicId           String       @map("clinic_id")
-  direction          SmsDirection
-  appointmentId      String?      @map("appointment_id")
-  phone              String
-  body               String
-  providerStatus     String       @map("provider_status")
-  providerMessageId  String?      @map("provider_message_id")
-  createdAt          DateTime     @default(now()) @map("created_at")
+  id                String       @id @default(cuid())
+  clinicId          String       @map("clinic_id")
+  direction         SmsDirection
+  appointmentId     String?      @map("appointment_id")
+  phone             String
+  body              String
+  providerStatus    String       @map("provider_status")
+  providerMessageId String?      @map("provider_message_id")
+  createdAt         DateTime     @default(now()) @map("created_at")
 
   clinic      Clinic       @relation(fields: [clinicId], references: [id])
   appointment Appointment? @relation(fields: [appointmentId], references: [id])

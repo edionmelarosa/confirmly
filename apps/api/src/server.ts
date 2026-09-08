@@ -4,13 +4,13 @@ import { createSmsService } from "./services/sms";
 import { startReminderDispatchJob } from "./jobs/reminder-dispatch";
 
 const env = loadEnv();
-const app = buildApp(env);
+const smsService = createSmsService(env);
+const app = buildApp(env, smsService);
 
 app
   .listen({ port: env.PORT, host: "0.0.0.0" })
   .then((address) => {
     app.log.info(`confirmly api listening on ${address}`);
-    const smsService = createSmsService(env);
     startReminderDispatchJob(env, smsService);
   })
   .catch((err) => {
