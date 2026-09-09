@@ -7,6 +7,7 @@ export const size = {
 export const contentType = "image/png";
 
 export default function Icon() {
+  // next/og's ImageResponse renders via satori, not the DOM/Tailwind pipeline — inline style is the only styling API it accepts.
   return new ImageResponse(
     (
       <div

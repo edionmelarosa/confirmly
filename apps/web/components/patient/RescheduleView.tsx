@@ -4,6 +4,7 @@ import { useState } from "react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { AvailableSlotDto, RescheduleSessionResponse } from "@confirmly/shared-types";
 import { formatInClinicTz } from "./format";
+import { PatientButton } from "./PatientButton";
 
 interface RescheduleViewProps {
   token: string;
@@ -62,28 +63,24 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
       </div>
 
       {!showSlots ? (
-        <button
-          onClick={loadSlots}
-          className="rounded-lg bg-neutral-900 px-4 py-3 text-white active:bg-neutral-700"
-        >
-          Choose a new time
-        </button>
+        <PatientButton onClick={loadSlots}>Choose a new time</PatientButton>
       ) : (
         <div className="flex flex-col gap-2">
-          {submitError && <p className="text-red-600">{submitError}</p>}
+          {submitError && <p className="text-status-cancelled">{submitError}</p>}
           {slots.length === 0 ? (
             <p className="text-neutral-500">Loading available times…</p>
           ) : (
             <ul className="flex flex-col gap-2">
               {slots.map((slot) => (
                 <li key={slot.startsAt}>
-                  <button
+                  <PatientButton
+                    variant="secondary"
                     onClick={() => handlePickSlot(slot)}
                     disabled={submitting}
-                    className="w-full rounded-lg border border-neutral-300 px-4 py-3 text-left active:bg-neutral-100"
+                    className="w-full text-left"
                   >
                     {formatInClinicTz(slot.startsAt, clinic.timezone)}
-                  </button>
+                  </PatientButton>
                 </li>
               ))}
             </ul>

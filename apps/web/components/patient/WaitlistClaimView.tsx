@@ -4,6 +4,7 @@ import { useState } from "react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { WaitlistClaimSessionResponse } from "@confirmly/shared-types";
 import { formatInClinicTz } from "./format";
+import { PatientButton } from "./PatientButton";
 
 interface WaitlistClaimViewProps {
   token: string;
@@ -43,18 +44,14 @@ export function WaitlistClaimView({ token, session, onClaimed }: WaitlistClaimVi
           {formatInClinicTz(session.desiredStart, session.clinic.timezone)} –{" "}
           {formatInClinicTz(session.desiredEnd, session.clinic.timezone)}).
         </p>
-        <p className="mt-1 text-sm text-amber-600">First come, first served — claim it now before it&apos;s gone.</p>
+        <p className="mt-1 text-sm text-status-pending">First come, first served — claim it now before it&apos;s gone.</p>
       </div>
 
-      {error && <p className="text-red-600">{error}</p>}
+      {error && <p className="text-status-cancelled">{error}</p>}
 
-      <button
-        onClick={handleClaim}
-        disabled={submitting}
-        className="rounded-lg bg-neutral-900 px-4 py-3 text-white active:bg-neutral-700"
-      >
+      <PatientButton onClick={handleClaim} disabled={submitting}>
         {submitting ? "Claiming…" : "Claim this slot"}
-      </button>
+      </PatientButton>
     </div>
   );
 }

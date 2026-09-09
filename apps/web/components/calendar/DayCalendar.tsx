@@ -105,7 +105,7 @@ export function DayCalendar() {
                 {slot.appointment ? (
                   <Badge status={slot.appointment.status}>{slot.appointment.status.replace("_", " ")}</Badge>
                 ) : (
-                  <span className="text-neutral-400">Open</span>
+                  <span className="text-neutral-500">Open</span>
                 )}
               </button>
             ))}

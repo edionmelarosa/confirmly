@@ -38,13 +38,13 @@ export function PatientSessionView({ token }: PatientSessionViewProps) {
   }
 
   if (state.status === "error") {
-    return <p className="text-center text-red-600">{state.message}</p>;
+    return <p className="text-center text-status-cancelled">{state.message}</p>;
   }
 
   if (state.status === "rescheduled") {
     return (
       <div className="text-center">
-        <p className="text-lg font-medium text-green-700">Your appointment has been rescheduled.</p>
+        <p className="text-lg font-medium text-status-confirmed">Your appointment has been rescheduled.</p>
         <p className="mt-2 text-neutral-600">A confirmation SMS has been sent to your phone.</p>
       </div>
     );
@@ -53,7 +53,7 @@ export function PatientSessionView({ token }: PatientSessionViewProps) {
   if (state.status === "claimed") {
     return (
       <div className="text-center">
-        <p className="text-lg font-medium text-green-700">You&apos;re booked!</p>
+        <p className="text-lg font-medium text-status-confirmed">You&apos;re booked!</p>
         <p className="mt-2 text-neutral-600">A confirmation SMS has been sent to your phone.</p>
       </div>
     );

@@ -15,11 +15,11 @@
   --color-brand-800: #115e59;
   --color-brand-900: #134e4a;
 
-  --color-status-confirmed: #16a34a;
+  --color-status-confirmed: #15803d;
   --color-status-confirmed-bg: #f0fdf4;
-  --color-status-pending: #d97706;
+  --color-status-pending: #b45309;
   --color-status-pending-bg: #fffbeb;
-  --color-status-cancelled: #dc2626;
+  --color-status-cancelled: #b91c1c;
   --color-status-cancelled-bg: #fef2f2;
   --color-status-noshow: #b91c1c;
   --color-status-noshow-bg: #fef2f2;
