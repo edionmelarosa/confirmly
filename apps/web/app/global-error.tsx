@@ -17,7 +17,8 @@ export default function GlobalError({
   return (
     <html>
       <body>
-        <h2>Something went wrong!</h2>
+        <h2>Something went wrong on our end.</h2>
+        <p>The error has been reported. Please try again.</p>
         <button onClick={() => retry()}>Try again</button>
       </body>
     </html>
