@@ -4,6 +4,7 @@ export * from "@/components/ui/Select";
 export * from "@/components/ui/Textarea";
 export * from "@/components/ui/Card";
 export * from "@/components/ui/Badge";
+export * from "@/components/ui/EmptyState";
 export * from "@/components/ui/Table";
 export * from "@/components/ui/Skeleton";
 export * from "@/components/ui/Dialog";
