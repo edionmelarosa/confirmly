@@ -3,6 +3,12 @@
 import { useState, type FormEvent } from "react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { AppointmentDto } from "@confirmly/shared-types";
+import { Dialog, DialogBody, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Badge } from "@/components/ui/Badge";
+import { useToast } from "@/components/ui/ToastProvider";
 
 interface AppointmentFormProps {
   startsAt: Date;
@@ -12,16 +18,17 @@ interface AppointmentFormProps {
   onSaved: () => void;
 }
 
+type PendingAction = "cancel" | "no_show" | null;
+
 export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }: AppointmentFormProps) {
+  const toast = useToast();
   const [patientName, setPatientName] = useState("");
   const [patientPhone, setPatientPhone] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [resendConfirmed, setResendConfirmed] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
-    setError(null);
     setSubmitting(true);
 
     try {
@@ -36,14 +43,14 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
         endsAt: endsAt.toISOString(),
       });
 
+      toast.success("Appointment booked.");
       onSaved();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setError("This slot was just booked by someone else. Pick another slot.");
+        toast.error("This slot was just booked by someone else. Pick another slot.");
       } else {
-        setError(err instanceof ApiError ? err.message : "Something went wrong");
+        toast.error(err instanceof ApiError ? err.message : "Something went wrong");
       }
-    } finally {
       setSubmitting(false);
     }
   }
@@ -51,13 +58,12 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
   async function handleCancel() {
     if (!existing) return;
     setSubmitting(true);
-    setError(null);
     try {
       await apiClient.post(`/appointments/${existing.id}/cancel`);
+      toast.success("Appointment cancelled.");
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
-    } finally {
+      toast.error(err instanceof ApiError ? err.message : "Something went wrong");
       setSubmitting(false);
     }
   }
@@ -65,13 +71,12 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
   async function handleStatusOverride(status: "confirmed" | "no_show") {
     if (!existing) return;
     setSubmitting(true);
-    setError(null);
     try {
       await apiClient.patch(`/appointments/${existing.id}`, { status });
+      toast.success(status === "no_show" ? "Marked as no-show." : "Appointment confirmed.");
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
-    } finally {
+      toast.error(err instanceof ApiError ? err.message : "Something went wrong");
       setSubmitting(false);
     }
   }
@@ -79,95 +84,127 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
   async function handleResendReminder() {
     if (!existing) return;
     setSubmitting(true);
-    setError(null);
     try {
       await apiClient.post(`/appointments/${existing.id}/resend-reminder`);
-      setResendConfirmed(true);
+      toast.success("Reminder resent.");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
+      toast.error(err instanceof ApiError ? err.message : "Something went wrong");
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div
-      role="dialog"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.4)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <div style={{ background: "white", padding: 24, borderRadius: 8, minWidth: 320 }}>
-        <h2>
-          {existing ? "Appointment" : "New appointment"} —{" "}
-          {startsAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
-        </h2>
+    <>
+      <Dialog open onClose={onClose}>
+        <DialogHeader>
+          <DialogTitle>
+            {existing ? "Appointment" : "New appointment"} —{" "}
+            {startsAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+          </DialogTitle>
+        </DialogHeader>
 
         {existing ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <p>Status: {existing.status}</p>
-            {error && <p style={{ color: "crimson" }}>{error}</p>}
-            {resendConfirmed && <p style={{ color: "green" }}>Reminder resent.</p>}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button
-                onClick={() => handleStatusOverride("confirmed")}
-                disabled={submitting || existing.status === "confirmed"}
-              >
-                Force confirm
-              </button>
-              <button
-                onClick={() => handleStatusOverride("no_show")}
-                disabled={submitting || existing.status === "no_show"}
-              >
-                Mark no-show
-              </button>
-              <button onClick={handleResendReminder} disabled={submitting || existing.status === "cancelled"}>
-                Resend reminder now
-              </button>
-              <button onClick={handleCancel} disabled={submitting || existing.status === "cancelled"}>
-                Cancel appointment
-              </button>
-              <button onClick={onClose} type="button">
+          <>
+            <DialogBody className="flex flex-col gap-4">
+              <div className="flex items-center gap-2 text-sm text-neutral-600">
+                Status: <Badge status={existing.status}>{existing.status.replace("_", " ")}</Badge>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleStatusOverride("confirmed")}
+                  disabled={submitting || existing.status === "confirmed"}
+                >
+                  Force confirm
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setPendingAction("no_show")}
+                  disabled={submitting || existing.status === "no_show"}
+                >
+                  Mark no-show
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleResendReminder}
+                  disabled={submitting || existing.status === "cancelled"}
+                >
+                  Resend reminder now
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setPendingAction("cancel")}
+                  disabled={submitting || existing.status === "cancelled"}
+                >
+                  Cancel appointment
+                </Button>
+              </div>
+            </DialogBody>
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={onClose}>
                 Close
-              </button>
-            </div>
-          </div>
+              </Button>
+            </DialogFooter>
+          </>
         ) : (
-          <form onSubmit={handleCreate} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <label>
-              Patient name
-              <input
-                value={patientName}
-                onChange={(e) => setPatientName(e.target.value)}
-                required
-              />
-            </label>
-            <label>
-              Patient phone
-              <input
-                value={patientPhone}
-                onChange={(e) => setPatientPhone(e.target.value)}
-                placeholder="+639171234567"
-                required
-              />
-            </label>
-            {error && <p style={{ color: "crimson" }}>{error}</p>}
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="submit" disabled={submitting}>
-                {submitting ? "Saving..." : "Book slot"}
-              </button>
-              <button type="button" onClick={onClose}>
+          <form onSubmit={handleCreate}>
+            <DialogBody className="flex flex-col gap-4">
+              <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                Patient name
+                <Input value={patientName} onChange={(e) => setPatientName(e.target.value)} required />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                Patient phone
+                <Input
+                  value={patientPhone}
+                  onChange={(e) => setPatientPhone(e.target.value)}
+                  placeholder="+639171234567"
+                  required
+                />
+              </label>
+            </DialogBody>
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={onClose}>
                 Cancel
-              </button>
-            </div>
+              </Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Saving..." : "Book slot"}
+              </Button>
+            </DialogFooter>
           </form>
         )}
-      </div>
-    </div>
+      </Dialog>
+
+      <ConfirmDialog
+        open={pendingAction === "cancel"}
+        title="Cancel this appointment?"
+        message="The patient will need to be rebooked separately. This cannot be undone."
+        confirmLabel="Cancel appointment"
+        cancelLabel="Keep appointment"
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => {
+          setPendingAction(null);
+          handleCancel();
+        }}
+      />
+
+      <ConfirmDialog
+        open={pendingAction === "no_show"}
+        title="Mark as no-show?"
+        message="This records that the patient did not show up for this appointment."
+        confirmLabel="Mark no-show"
+        cancelLabel="Cancel"
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => {
+          setPendingAction(null);
+          handleStatusOverride("no_show");
+        }}
+      />
+    </>
   );
 }
