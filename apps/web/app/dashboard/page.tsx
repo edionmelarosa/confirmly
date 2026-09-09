@@ -113,10 +113,33 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Today's appointments" value={todaysAppointments.length} icon={CalendarCheck} />
-        <StatCard label="No-shows this week" value={noShowsThisWeek} icon={UserX} tone="danger" />
-        <StatCard label="Pending waitlist offers" value={pendingWaitlistOffers} icon={ClipboardList} tone="warning" />
-        <StatCard label="Unconfirmed (next 24h)" value={unconfirmedNext24h} icon={AlarmClock} tone="warning" />
+        <StatCard
+          label="Today's appointments"
+          value={todaysAppointments.length}
+          icon={CalendarCheck}
+          href="/dashboard/appointments"
+        />
+        <StatCard
+          label="No-shows this week"
+          value={noShowsThisWeek}
+          icon={UserX}
+          tone="danger"
+          href="/dashboard/appointments"
+        />
+        <StatCard
+          label="Pending waitlist offers"
+          value={pendingWaitlistOffers}
+          icon={ClipboardList}
+          tone="warning"
+          href="/dashboard/waitlist"
+        />
+        <StatCard
+          label="Unconfirmed (next 24h)"
+          value={unconfirmedNext24h}
+          icon={AlarmClock}
+          tone="warning"
+          href="/dashboard/appointments"
+        />
       </div>
 
       <Card>

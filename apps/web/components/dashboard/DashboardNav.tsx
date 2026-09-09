@@ -31,8 +31,8 @@ export function DashboardNav({ clinicName }: { clinicName: string }) {
         <div className="flex items-center gap-6">
           <Link href="/dashboard" className="flex items-center gap-2">
             <span className="text-lg font-semibold text-brand-700">Confirmly</span>
-            <span className="text-sm text-neutral-400">·</span>
-            <span className="text-sm text-neutral-600">{clinicName}</span>
+            <span className="text-neutral-300">|</span>
+            <span className="text-sm font-semibold text-neutral-900">{clinicName}</span>
           </Link>
           <div className="hidden items-center gap-1 md:flex">
             {NAV_LINKS.map((link) => (
