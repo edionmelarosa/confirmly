@@ -14,7 +14,7 @@ Full context lives in:
 
 ## Status
 
-**Pre-PMF, actively building Phase 1 (Foundation).** Validating the core assumption (no-show/reschedule volume, staff time spent) with a single pilot clinic (founder's dentist) before/alongside building. See [Build phases](#build-phases) below for what's implemented so far.
+**Pre-PMF, Phases 1–5 built on main.** Validating the core assumption (no-show/reschedule volume, staff time spent) with a single pilot clinic (founder's dentist) before/alongside building. Live deployment in progress. See [Build phases](#build-phases) below for what's implemented so far.
 
 ## What this is
 
@@ -43,21 +43,21 @@ These are deliberate, not oversights — see `docs/business-plan.md` §2/§8 and
                     ┌─────────────────────────┐
                     │   Next.js App           │
                     │  - /dashboard (staff)   │
-                    │  - /c/[token] (patient) │  ← not built yet (Phase 3)
+                    │  - /c/[token] (patient) │
                     └───────────┬─────────────┘
                                 │ REST
                     ┌───────────▼─────────────┐
                     │   Node.js API (Fastify)  │
                     │  - Auth (clinic staff)   │
                     │  - Appointments CRUD     │
-                    │  - Waitlist logic        │  ← not built yet (Phase 4)
-                    │  - SMS abstraction layer │  ← not built yet (Phase 2)
-                    │  - Scheduled job runner  │  ← not built yet (Phase 2)
+                    │  - Waitlist logic        │
+                    │  - SMS abstraction layer │
+                    │  - Scheduled job runner  │
                     └───────┬───────┬──────────┘
                             │       │
                  ┌──────────▼─┐   ┌─▼────────────────┐
                  │ PostgreSQL │   │ SMS Gateway       │
-                 │ (Railway)  │   │ (Semaphore/       │  ← not built yet (Phase 2)
+                 │ (Railway)  │   │ (Semaphore/       │
                  │            │   │  Movider)         │
                  └────────────┘   └───────────────────┘
 ```
@@ -69,13 +69,13 @@ One Node process serves the API, deployed as a separate service from the Next.js
 ```
 confirmly/
 ├── apps/
-│   ├── web/     # Next.js (App Router) — staff dashboard, later the patient /c/[token] page
-│   └── api/     # Fastify API server — auth, appointments/patients CRUD, (later) SMS + cron
+│   ├── web/     # Next.js (App Router) — staff dashboard + patient /c/[token] page
+│   └── api/     # Fastify API server — auth, appointments/patients CRUD, SMS + cron
 ├── packages/
 │   ├── db/            # Prisma schema, migrations, generated client
 │   ├── shared-types/  # Shared TS types/DTOs between web and api
 │   ├── config/        # Shared eslint/tsconfig/prettier config
-│   └── sms/           # SMS provider abstraction — not built yet (Phase 2)
+│   └── sms/           # SMS provider abstraction
 ├── docs/       # business plan, technical plan, local setup guide
 ├── plans/      # phased implementation plan (this repo's build order)
 ├── docker-compose.yml   # local Postgres
@@ -93,12 +93,12 @@ confirmly/
 | Backend | Node.js + Fastify |
 | Database | PostgreSQL via Prisma |
 | Staff auth | Session-based (httpOnly cookies, Argon2 password hashing) — no heavyweight auth provider |
-| Patient identity | No login — signed, expiring tokenized links only (Phase 3) |
-| SMS | Provider-agnostic abstraction over Semaphore or Movider (PH-local gateways) — Phase 2 |
-| Scheduled jobs | `node-cron` in the API process — Phase 2 |
+| Patient identity | No login — signed, expiring tokenized links only |
+| SMS | Provider-agnostic abstraction over Semaphore or Movider (PH-local gateways) |
+| Scheduled jobs | `node-cron` in the API process |
 | Hosting | Railway or Render — single long-running instance per service, not serverless |
 | Monorepo | Turborepo + pnpm workspaces |
-| Error tracking | Sentry (free tier) — Phase 5 |
+| Error tracking | Sentry (free tier) |
 
 ## Core data entities
 
@@ -112,13 +112,13 @@ Follows `docs/technical-plan.md` §8 and the per-phase plans in [`plans/`](./pla
 
 | Phase | Covers | Status |
 |---|---|---|
-| 1 — [Foundation](./plans/phase-1-foundation.md) | Monorepo, DB schema, staff auth, manual appointment CRUD dashboard, deploy | ✅ Built locally — Steps 5 & 12 (live Railway/Render provisioning + deploy) blocked on a live account |
-| 2 — [Reminders](./plans/phase-2-reminders.md) | SMS abstraction, reminder cron, `SmsLog` | Not started |
-| 3 — [Patient self-service](./plans/phase-3-patient-self-service.md) | Inbound SMS reply handling, tokenized reschedule page | Not started |
-| 4 — [Waitlist](./plans/phase-4-waitlist.md) | Waitlist capture + auto-fill on cancellation | Not started |
-| 5 — [Polish for pilot](./plans/phase-5-polish-for-pilot.md) | Sentry, clinic settings, manual staff override fallback | Not started |
+| 1 — [Foundation](./plans/phase-1-foundation.md) | Monorepo, DB schema, staff auth, manual appointment CRUD dashboard, deploy | ✅ Built locally; live Railway deploy in progress |
+| 2 — [Reminders](./plans/phase-2-reminders.md) | SMS abstraction, reminder cron, `SmsLog` | ✅ Built |
+| 3 — [Patient self-service](./plans/phase-3-patient-self-service.md) | Inbound SMS reply handling, tokenized reschedule page | ✅ Built |
+| 4 — [Waitlist](./plans/phase-4-waitlist.md) | Waitlist capture + auto-fill on cancellation | ✅ Built |
+| 5 — [Polish for pilot](./plans/phase-5-polish-for-pilot.md) | Sentry, clinic settings, manual staff override fallback | ✅ Built |
 
-Phases 1–3 are the minimum viable pilot per the business plan; 4–5 follow only once the core loop is validated with the pilot clinic.
+Phases 1–3 are the minimum viable pilot per the business plan; 4–5 add waitlist and polish. Phase 6 (recurring appointments, session-based capacity) exists on branch `feat/phase-6-recurring` but is not yet on `main` — deferred until pilot validation demonstrates demand.
 
 ## Quick start (local dev)
 
