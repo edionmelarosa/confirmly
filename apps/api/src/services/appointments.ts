@@ -7,6 +7,10 @@ export interface CreateAppointmentParams {
   resourceId?: string | null;
   startsAt: Date;
   endsAt: Date;
+  followUpOfAppointmentId?: string | null;
+  recurrenceRuleId?: string | null;
+  isSessionCapacity?: boolean;
+  sessionOfDay?: "am" | "pm" | null;
 }
 
 export interface UpdateAppointmentParams {
@@ -15,6 +19,7 @@ export interface UpdateAppointmentParams {
   startsAt?: Date;
   endsAt?: Date;
   status?: AppointmentStatus;
+  followUpOfAppointmentId?: string | null;
 }
 
 export class DoubleBookingError extends Error {
@@ -46,6 +51,10 @@ async function createAppointment(params: CreateAppointmentParams) {
         resourceId: params.resourceId ?? null,
         startsAt: params.startsAt,
         endsAt: params.endsAt,
+        followUpOfAppointmentId: params.followUpOfAppointmentId ?? null,
+        recurrenceRuleId: params.recurrenceRuleId ?? null,
+        isSessionCapacity: params.isSessionCapacity ?? false,
+        sessionOfDay: params.sessionOfDay ?? null,
       },
     });
   } catch (err) {
@@ -75,8 +84,9 @@ async function updateAppointment(clinicId: string, id: string, params: UpdateApp
     return null;
   }
 
+  let updated;
   try {
-    return await prisma.appointment.update({
+    updated = await prisma.appointment.update({
       where: { id },
       data: params,
     });
@@ -86,6 +96,8 @@ async function updateAppointment(clinicId: string, id: string, params: UpdateApp
     }
     throw err;
   }
+
+  return updated;
 }
 
 async function cancelAppointment(clinicId: string, id: string) {

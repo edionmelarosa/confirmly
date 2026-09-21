@@ -7,21 +7,50 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum SchedulingMode {
+  fixed_time
+  session_capacity
+}
+
+enum SessionOfDay {
+  am
+  pm
+}
+
+enum RecurrenceRuleType {
+  every_n_weeks
+  day_of_month
+}
+
+enum RecurrenceRuleStatus {
+  active
+  paused
+  cancelled
+}
+
 model Clinic {
-  id                 String   @id @default(cuid())
+  id                 String         @id @default(cuid())
   name               String
   timezone           String
-  smsSenderName      String   @map("sms_sender_name")
-  reminderLeadHours  Int      @default(24) @map("reminder_lead_hours")
-  subscriptionStatus String   @map("subscription_status")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  smsSenderName      String         @map("sms_sender_name")
+  reminderLeadHours  Int            @default(24) @map("reminder_lead_hours")
+  subscriptionStatus String         @map("subscription_status")
+  schedulingMode     SchedulingMode @default(fixed_time) @map("scheduling_mode")
+  sessionCapacityAm  Int?           @map("session_capacity_am")
+  sessionCapacityPm  Int?           @map("session_capacity_pm")
+  sessionAmStartHour Int            @default(8) @map("session_am_start_hour")
+  sessionAmEndHour   Int            @default(12) @map("session_am_end_hour")
+  sessionPmStartHour Int            @default(13) @map("session_pm_start_hour")
+  sessionPmEndHour   Int            @default(18) @map("session_pm_end_hour")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
 
-  staffUsers      StaffUser[]
-  patients        Patient[]
-  appointments    Appointment[]
-  waitlistEntries WaitlistEntry[]
-  smsLogs         SmsLog[]
+  staffUsers       StaffUser[]
+  patients         Patient[]
+  appointments     Appointment[]
+  waitlistEntries  WaitlistEntry[]
+  smsLogs          SmsLog[]
+  recurrenceRules  RecurrenceRule[]
 
   @@map("clinics")
 }
@@ -60,9 +89,10 @@ model Patient {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  clinic          Clinic          @relation(fields: [clinicId], references: [id])
+  clinic          Clinic           @relation(fields: [clinicId], references: [id])
   appointments    Appointment[]
   waitlistEntries WaitlistEntry[]
+  recurrenceRules RecurrenceRule[]
 
   @@unique([clinicId, phone])
   @@map("patients")
@@ -77,24 +107,56 @@ enum AppointmentStatus {
 }
 
 model Appointment {
-  id             String            @id @default(cuid())
-  clinicId       String            @map("clinic_id")
-  patientId      String            @map("patient_id")
-  resourceId     String?           @map("resource_id")
-  startsAt       DateTime          @map("starts_at") @db.Timestamptz(3)
-  endsAt         DateTime          @map("ends_at") @db.Timestamptz(3)
-  status         AppointmentStatus @default(scheduled)
-  reminderSentAt DateTime?         @map("reminder_sent_at")
-  createdAt      DateTime          @default(now()) @map("created_at")
-  updatedAt      DateTime          @updatedAt @map("updated_at")
+  id                      String            @id @default(cuid())
+  clinicId                String            @map("clinic_id")
+  patientId               String            @map("patient_id")
+  resourceId              String?           @map("resource_id")
+  startsAt                DateTime          @map("starts_at") @db.Timestamptz(3)
+  endsAt                  DateTime          @map("ends_at") @db.Timestamptz(3)
+  status                  AppointmentStatus @default(scheduled)
+  reminderSentAt          DateTime?         @map("reminder_sent_at")
+  followUpOfAppointmentId String?           @map("follow_up_of_appointment_id")
+  recurrenceRuleId        String?           @map("recurrence_rule_id")
+  sessionOfDay            SessionOfDay?     @map("session_of_day")
+  isSessionCapacity       Boolean           @default(false) @map("is_session_capacity")
+  createdAt               DateTime          @default(now()) @map("created_at")
+  updatedAt               DateTime          @updatedAt @map("updated_at")
+
+  clinic                Clinic          @relation(fields: [clinicId], references: [id])
+  patient               Patient         @relation(fields: [patientId], references: [id])
+  followUpOfAppointment Appointment?    @relation("AppointmentFollowUp", fields: [followUpOfAppointmentId], references: [id])
+  followUps             Appointment[]   @relation("AppointmentFollowUp")
+  recurrenceRule        RecurrenceRule? @relation(fields: [recurrenceRuleId], references: [id])
+  smsLogs               SmsLog[]
+  accessTokens          AccessToken[]
+
+  @@index([clinicId, resourceId, startsAt])
+  @@index([followUpOfAppointmentId])
+  @@index([recurrenceRuleId])
+  @@map("appointments")
+}
+
+model RecurrenceRule {
+  id              String               @id @default(cuid())
+  clinicId        String               @map("clinic_id")
+  patientId       String               @map("patient_id")
+  resourceId      String?              @map("resource_id")
+  ruleType        RecurrenceRuleType   @map("rule_type")
+  intervalWeeks   Int?                 @map("interval_weeks")
+  dayOfMonth      Int?                 @map("day_of_month")
+  durationMinutes Int                  @default(30) @map("duration_minutes")
+  sessionOfDay    SessionOfDay?        @map("session_of_day")
+  status          RecurrenceRuleStatus @default(active)
+  notes           String?
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
 
   clinic       Clinic        @relation(fields: [clinicId], references: [id])
   patient      Patient       @relation(fields: [patientId], references: [id])
-  smsLogs      SmsLog[]
-  accessTokens AccessToken[]
+  appointments Appointment[]
 
-  @@index([clinicId, resourceId, startsAt])
-  @@map("appointments")
+  @@index([clinicId, patientId])
+  @@map("recurrence_rules")
 }
 
 enum WaitlistStatus {

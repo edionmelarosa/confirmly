@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { AppointmentDto } from "@confirmly/shared-types";
 import { Dialog, DialogBody, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
@@ -26,6 +26,26 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
   const [patientPhone, setPatientPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [priorVisits, setPriorVisits] = useState<AppointmentDto[]>([]);
+  const [followUpOfAppointmentId, setFollowUpOfAppointmentId] = useState("");
+
+  useEffect(() => {
+    if (existing) return;
+    apiClient
+      .get<AppointmentDto[]>("/appointments")
+      .then((rows) => {
+        setPriorVisits(
+          rows
+            .filter((a) => a.status === "completed" || a.status === "confirmed" || a.status === "scheduled")
+            .slice()
+            .sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime())
+            .slice(0, 30),
+        );
+      })
+      .catch(() => {
+        /* optional field — ignore load errors */
+      });
+  }, [existing]);
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -41,6 +61,7 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
         patientId: patient.id,
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
+        followUpOfAppointmentId: followUpOfAppointmentId || null,
       });
 
       toast.success("Appointment booked.");
@@ -68,12 +89,18 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
     }
   }
 
-  async function handleStatusOverride(status: "confirmed" | "no_show") {
+  async function handleStatusOverride(status: "confirmed" | "no_show" | "completed") {
     if (!existing) return;
     setSubmitting(true);
     try {
       await apiClient.patch(`/appointments/${existing.id}`, { status });
-      toast.success(status === "no_show" ? "Marked as no-show." : "Appointment confirmed.");
+      toast.success(
+        status === "no_show"
+          ? "Marked as no-show."
+          : status === "completed"
+            ? "Marked completed."
+            : "Appointment confirmed.",
+      );
       onSaved();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Something went wrong");
@@ -110,6 +137,12 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
               <div className="flex items-center gap-2 text-sm text-neutral-600">
                 Status: <Badge status={existing.status}>{existing.status.replace("_", " ")}</Badge>
               </div>
+              {existing.followUpOfAppointmentId ? (
+                <p className="text-sm text-neutral-600">Followup to a prior visit</p>
+              ) : null}
+              {existing.recurrenceRuleId ? (
+                <p className="text-sm text-neutral-600">Part of a recurrence rule</p>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="secondary"
@@ -118,6 +151,14 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
                   disabled={submitting || existing.status === "confirmed"}
                 >
                   Force confirm
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleStatusOverride("completed")}
+                  disabled={submitting || existing.status === "completed"}
+                >
+                  Mark completed
                 </Button>
                 <Button
                   variant="secondary"
@@ -166,6 +207,25 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
                   placeholder="+639171234567"
                   required
                 />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                Link to a prior visit (optional)
+                <select
+                  className="rounded-md border border-neutral-300 px-3 py-2"
+                  value={followUpOfAppointmentId}
+                  onChange={(e) => setFollowUpOfAppointmentId(e.target.value)}
+                >
+                  <option value="">None</option>
+                  {priorVisits.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {new Date(a.startsAt).toLocaleString(undefined, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}{" "}
+                      ({a.status})
+                    </option>
+                  ))}
+                </select>
               </label>
             </DialogBody>
             <DialogFooter>
