@@ -10,7 +10,8 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "db:seed": "pnpm --filter @confirmly/db seed"
+    "db:seed": "pnpm --filter @confirmly/db seed",
+    "start": "node -e \"console.log('confirmly monorepo \u2014 set per-service startCommand')\""
   },
   "devDependencies": {
     "turbo": "^2.3.0",
