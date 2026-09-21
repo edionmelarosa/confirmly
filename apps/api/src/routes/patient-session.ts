@@ -5,6 +5,7 @@ import type { AvailableSlotDto, PatientSessionResponse, WaitlistClaimResponse } 
 import type { SmsService } from "../services/sms";
 import { resolveAccessToken, markAccessTokenUsed } from "../services/tokens";
 import { appointmentsService, DoubleBookingError } from "../services/appointments";
+import { sessionsService, SessionFullError } from "../services/sessions";
 
 const SLOT_MINUTES = 30;
 const DAY_START_HOUR = 8;
@@ -12,19 +13,41 @@ const DAY_END_HOUR = 18;
 const SLOT_SEARCH_DAYS = 14;
 
 const rescheduleSchema = z.object({
-  startsAt: z.coerce.date(),
-  endsAt: z.coerce.date(),
+  startsAt: z.coerce.date().optional(),
+  endsAt: z.coerce.date().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  sessionOfDay: z.enum(["am", "pm"]).optional(),
 });
 
 async function buildAvailableSlots(clinicId: string, resourceId: string | null): Promise<AvailableSlotDto[]> {
+  const clinic = await prisma.clinic.findUniqueOrThrow({ where: { id: clinicId } });
   const now = new Date();
-  const searchEnd = new Date(now.getTime() + SLOT_SEARCH_DAYS * 24 * 60 * 60 * 1000);
 
+  if (clinic.schedulingMode === "session_capacity") {
+    const slots: AvailableSlotDto[] = [];
+    for (let day = 0; day < SLOT_SEARCH_DAYS; day++) {
+      const d = new Date(now.getTime() + day * 24 * 60 * 60 * 1000);
+      const dateYmd = sessionsService.dateYmdInTimeZone(d, clinic.timezone);
+      for (const sessionOfDay of ["am", "pm"] as const) {
+        const { remaining, capacity } = await sessionsService.remainingSessionCapacity(
+          clinicId,
+          dateYmd,
+          sessionOfDay,
+        );
+        if (remaining > 0) {
+          slots.push({ kind: "session", date: dateYmd, sessionOfDay, remaining, capacity });
+        }
+      }
+    }
+    return slots;
+  }
+
+  const searchEnd = new Date(now.getTime() + SLOT_SEARCH_DAYS * 24 * 60 * 60 * 1000);
   const existing = await prisma.appointment.findMany({
     where: {
       clinicId,
       resourceId,
-      status: { not: "cancelled" },
+      status: { notIn: ["cancelled", "no_show"] },
       startsAt: { gte: now, lte: searchEnd },
     },
     select: { startsAt: true },
@@ -46,7 +69,7 @@ async function buildAvailableSlots(clinicId: string, resourceId: string | null):
       if (taken.has(startsAt.getTime())) continue;
 
       const endsAt = new Date(startsAt.getTime() + SLOT_MINUTES * 60_000);
-      slots.push({ startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() });
+      slots.push({ kind: "timed", startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() });
     }
   }
 
@@ -107,11 +130,16 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
         startsAt: appointment.startsAt.toISOString(),
         endsAt: appointment.endsAt.toISOString(),
         status: appointment.status,
+        sessionOfDay: appointment.sessionOfDay,
+        isSessionCapacity: appointment.isSessionCapacity,
       },
       clinic: {
         name: appointment.clinic.name,
         timezone: appointment.clinic.timezone,
+        schedulingMode: appointment.clinic.schedulingMode,
       },
+      // appointment session fields included for patient UI
+
     };
 
     return reply.send(response);
@@ -153,10 +181,40 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
     }
 
     try {
-      const updated = await appointmentsService.updateAppointment(appointment.clinicId, appointment.id, {
-        startsAt: body.data.startsAt,
-        endsAt: body.data.endsAt,
-      });
+      let updated;
+      if (
+        appointment.clinic.schedulingMode === "session_capacity" ||
+        appointment.isSessionCapacity
+      ) {
+        if (!body.data.date || !body.data.sessionOfDay) {
+          return reply.code(400).send({
+            error: "invalid_request",
+            message: "date and sessionOfDay are required to reschedule in session mode",
+          });
+        }
+        // Cancel old row then book a new session slot (capacity gate)
+        await appointmentsService.cancelAppointment(appointment.clinicId, appointment.id);
+        updated = await sessionsService.bookSessionCapacitySlot({
+          clinicId: appointment.clinicId,
+          patientId: appointment.patientId,
+          date: body.data.date,
+          sessionOfDay: body.data.sessionOfDay,
+          resourceId: appointment.resourceId,
+          recurrenceRuleId: appointment.recurrenceRuleId,
+          followUpOfAppointmentId: appointment.followUpOfAppointmentId,
+        });
+      } else {
+        if (!body.data.startsAt || !body.data.endsAt) {
+          return reply.code(400).send({
+            error: "invalid_request",
+            message: "startsAt and endsAt are required",
+          });
+        }
+        updated = await appointmentsService.updateAppointment(appointment.clinicId, appointment.id, {
+          startsAt: body.data.startsAt,
+          endsAt: body.data.endsAt,
+        });
+      }
       if (!updated) {
         return reply.code(410).send({ error: "gone", message: "Appointment no longer exists" });
       }
@@ -179,6 +237,9 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
         status: updated.status,
       });
     } catch (err) {
+      if (err instanceof SessionFullError) {
+        return reply.code(409).send({ error: "session_full", message: err.message });
+      }
       if (err instanceof DoubleBookingError) {
         return reply.code(409).send({ error: "double_booking", message: err.message });
       }
@@ -242,6 +303,9 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
       };
       return reply.send(response);
     } catch (err) {
+      if (err instanceof SessionFullError) {
+        return reply.code(409).send({ error: "session_full", message: err.message });
+      }
       if (err instanceof DoubleBookingError) {
         // Slot got taken by a direct booking before we could claim it; revert the entry so it isn't stuck as claimed.
         await prisma.waitlistEntry.update({ where: { id: entry.id }, data: { status: "expired" } });

@@ -1,13 +1,18 @@
+import type { SessionOfDay } from "./clinic";
+
 export interface PatientSessionAppointmentDto {
   id: string;
   startsAt: string;
   endsAt: string;
   status: string;
+  sessionOfDay?: SessionOfDay | null;
+  isSessionCapacity?: boolean;
 }
 
 export interface PatientSessionClinicDto {
   name: string;
   timezone: string;
+  schedulingMode?: "fixed_time" | "session_capacity";
 }
 
 export interface RescheduleSessionResponse {
@@ -25,14 +30,33 @@ export interface WaitlistClaimSessionResponse {
 
 export type PatientSessionResponse = RescheduleSessionResponse | WaitlistClaimSessionResponse;
 
-export interface AvailableSlotDto {
+export interface TimedAvailableSlotDto {
+  kind: "timed";
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface SessionAvailableSlotDto {
+  kind: "session";
+  date: string;
+  sessionOfDay: SessionOfDay;
+  remaining: number;
+  capacity: number;
+}
+
+export type AvailableSlotDto = TimedAvailableSlotDto | SessionAvailableSlotDto;
+
+/** @deprecated prefer TimedAvailableSlotDto; kept for older clients that only send times */
+export interface LegacyTimedSlot {
   startsAt: string;
   endsAt: string;
 }
 
 export interface RescheduleRequest {
-  startsAt: string;
-  endsAt: string;
+  startsAt?: string;
+  endsAt?: string;
+  date?: string;
+  sessionOfDay?: SessionOfDay;
 }
 
 export interface WaitlistClaimResponse {

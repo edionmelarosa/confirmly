@@ -34,10 +34,17 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await apiClient.post(`/api/patient/session/${token}/reschedule`, {
-        startsAt: slot.startsAt,
-        endsAt: slot.endsAt,
-      });
+      if (slot.kind === "session") {
+        await apiClient.post(`/api/patient/session/${token}/reschedule`, {
+          date: slot.date,
+          sessionOfDay: slot.sessionOfDay,
+        });
+      } else {
+        await apiClient.post(`/api/patient/session/${token}/reschedule`, {
+          startsAt: slot.startsAt,
+          endsAt: slot.endsAt,
+        });
+      }
       onRescheduled();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -52,13 +59,30 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
     }
   }
 
+  function slotKey(slot: AvailableSlotDto): string {
+    return slot.kind === "session" ? `${slot.date}-${slot.sessionOfDay}` : slot.startsAt;
+  }
+
+  function slotLabel(slot: AvailableSlotDto): string {
+    if (slot.kind === "session") {
+      const label = slot.sessionOfDay === "am" ? "Morning" : "Afternoon";
+      return `${slot.date} · ${label} (${slot.remaining} left)`;
+    }
+    return formatInClinicTz(slot.startsAt, clinic.timezone);
+  }
+
+  const currentLabel =
+    appointment.isSessionCapacity && appointment.sessionOfDay
+      ? `${new Date(appointment.startsAt).toLocaleDateString()} · ${
+          appointment.sessionOfDay === "am" ? "Morning" : "Afternoon"
+        }`
+      : formatInClinicTz(appointment.startsAt, clinic.timezone);
+
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">{clinic.name}</h1>
-        <p className="mt-1 text-neutral-700">
-          Current appointment: {formatInClinicTz(appointment.startsAt, clinic.timezone)}
-        </p>
+        <p className="mt-1 text-neutral-700">Current appointment: {currentLabel}</p>
         <p className="text-sm text-neutral-500">Status: {appointment.status}</p>
       </div>
 
@@ -72,14 +96,14 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
           ) : (
             <ul className="flex flex-col gap-2">
               {slots.map((slot) => (
-                <li key={slot.startsAt}>
+                <li key={slotKey(slot)}>
                   <PatientButton
                     variant="secondary"
                     onClick={() => handlePickSlot(slot)}
                     disabled={submitting}
                     className="w-full text-left"
                   >
-                    {formatInClinicTz(slot.startsAt, clinic.timezone)}
+                    {slotLabel(slot)}
                   </PatientButton>
                 </li>
               ))}
