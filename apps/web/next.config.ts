@@ -1,22 +1,15 @@
 import type { NextConfig } from "next";
 
-const apiUpstream =
-  process.env.API_UPSTREAM_URL ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  "http://localhost:4000";
+// Real API origin for the rewrite destination (server-side only).
+const apiUpstream = (process.env.API_UPSTREAM_URL ?? "http://localhost:4000").replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
   async rewrites() {
-    // Same-origin /backend/* → API so session cookies stay on the web host
-    // (required when web + api are on different Railway domains).
-    const base = apiUpstream.replace(/\/$/, "");
-    if (base.endsWith("/backend")) {
-      return [];
-    }
+    // Browser calls same-origin /backend/*; Next proxies to the API service.
     return [
       {
         source: "/backend/:path*",
-        destination: `${base}/:path*`,
+        destination: `${apiUpstream}/:path*`,
       },
     ];
   },
