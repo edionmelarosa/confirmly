@@ -5,7 +5,7 @@
     "buildCommand": "pnpm --filter @confirmly/db generate && pnpm --filter @confirmly/api build"
   },
   "deploy": {
-    "startCommand": "pnpm --filter @confirmly/db migrate:deploy && pnpm --filter @confirmly/db seed && pnpm --filter @confirmly/api start",
+    "startCommand": "pnpm --filter @confirmly/db migrate:deploy && pnpm --filter @confirmly/api start",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }
