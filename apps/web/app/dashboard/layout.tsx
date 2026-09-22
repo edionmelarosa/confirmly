@@ -1,11 +1,11 @@
 import { cookies } from "next/headers";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+import { getApiUrl } from "@/lib/api-url";
 
 async function getClinicName(): Promise<string> {
   const cookieStore = await cookies();
-  const response = await fetch(`${API_URL}/clinic-settings`, {
+  const apiUrl = getApiUrl();
+  const response = await fetch(`${apiUrl}/clinic-settings`, {
     headers: { cookie: cookieStore.toString() },
     cache: "no-store",
   });
