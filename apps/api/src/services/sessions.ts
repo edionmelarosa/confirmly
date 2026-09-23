@@ -77,7 +77,7 @@ async function bookSessionCapacitySlot(params: BookSessionCapacityParams) {
               isSessionCapacity: true,
               sessionOfDay: params.sessionOfDay,
               startsAt,
-              status: { notIn: ["cancelled", "no_show"] },
+              status: { not: "cancelled" }, // a no-show still used the slot
             },
           });
           if (activeCount >= capacity) {
@@ -127,7 +127,7 @@ export async function remainingSessionCapacity(
       isSessionCapacity: true,
       sessionOfDay,
       startsAt,
-      status: { notIn: ["cancelled", "no_show"] },
+      status: { not: "cancelled" }, // a no-show still used the slot
     },
   });
   return { remaining: Math.max(0, capacity - activeCount), capacity, startsAt, endsAt };

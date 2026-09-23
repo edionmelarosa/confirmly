@@ -176,8 +176,8 @@ export function SessionCapacityView() {
         const list = bySession[key];
         const cap = caps[key];
         const label = key === "am" ? "Morning" : "Afternoon";
-        // No-shows stay listed for the record but don't occupy capacity (matches the server count).
-        const booked = list.filter((a) => a.status !== "no_show").length;
+        // Everything except cancelled counts, no-shows included (matches the server capacity check).
+        const booked = list.length;
         const full = cap > 0 && booked >= cap;
         return (
           <div key={key} className="max-w-lg rounded-md border border-neutral-200">
