@@ -23,10 +23,16 @@ export function WaitlistClaimView({ token, session, onClaimed }: WaitlistClaimVi
       await apiClient.post(`/api/patient/session/${token}/claim`);
       onClaimed();
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setError("Sorry, this slot was just taken by someone else.");
-      } else if (err instanceof ApiError && err.status === 410) {
-        setError("This offer has expired or was already claimed.");
+      if (err instanceof ApiError) {
+        if (err.status === 409) {
+          setError("Sorry, this slot was just taken by someone else.");
+        } else if (err.status === 410) {
+          setError("This offer has expired or was already claimed.");
+        } else if (err.status === 400) {
+          setError("Unable to claim this slot. Please contact the clinic.");
+        } else {
+          setError(`Something went wrong (${err.status}). Please try again or contact the clinic.`);
+        }
       } else {
         setError("Something went wrong. Please try again.");
       }

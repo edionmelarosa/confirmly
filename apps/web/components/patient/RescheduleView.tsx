@@ -49,10 +49,16 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
         onRescheduled(slot.startsAt);
       }
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setSubmitError("That time was just taken. Please pick another.");
-      } else if (err instanceof ApiError && err.status === 410) {
-        setSubmitError("This link has expired or was already used.");
+      if (err instanceof ApiError) {
+        if (err.status === 409) {
+          setSubmitError("That time was just taken. Please pick another.");
+        } else if (err.status === 410) {
+          setSubmitError("This link has expired or was already used.");
+        } else if (err.status === 400) {
+          setSubmitError("Unable to reschedule. Please contact the clinic.");
+        } else {
+          setSubmitError(`Something went wrong (${err.status}). Please try again or contact the clinic.`);
+        }
       } else {
         setSubmitError("Something went wrong. Please try again.");
       }
