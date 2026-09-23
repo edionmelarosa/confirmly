@@ -162,6 +162,8 @@ export default function WaitlistPage() {
           <Table>
             <TableHead>
               <TableRow>
+                <TableHeaderCell>Patient name</TableHeaderCell>
+                <TableHeaderCell>Phone</TableHeaderCell>
                 <TableHeaderCell>Desired range</TableHeaderCell>
                 <TableHeaderCell>Status</TableHeaderCell>
                 <TableHeaderCell>Added</TableHeaderCell>
@@ -171,6 +173,8 @@ export default function WaitlistPage() {
             <TableBody>
               {entries.map((entry) => (
                 <TableRow key={entry.id}>
+                  <TableCell>{entry.patientName}</TableCell>
+                  <TableCell>{entry.patientPhone}</TableCell>
                   <TableCell>
                     {new Date(entry.desiredStart).toLocaleString()} –{" "}
                     {new Date(entry.desiredEnd).toLocaleString()}

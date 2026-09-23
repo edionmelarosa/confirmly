@@ -38,11 +38,25 @@ async function createWaitlistEntry(params: CreateWaitlistEntryParams): Promise<W
   });
 }
 
-async function listWaitlistEntries(clinicId: string): Promise<WaitlistEntry[]> {
-  return prisma.waitlistEntry.findMany({
+async function listWaitlistEntries(clinicId: string) {
+  const entries = await prisma.waitlistEntry.findMany({
     where: { clinicId },
+    include: { patient: true },
     orderBy: { createdAt: "asc" },
   });
+  
+  return entries.map(entry => ({
+    id: entry.id,
+    clinicId: entry.clinicId,
+    patientId: entry.patientId,
+    patientName: entry.patient.name,
+    patientPhone: entry.patient.phone,
+    desiredStart: entry.desiredStart.toISOString(),
+    desiredEnd: entry.desiredEnd.toISOString(),
+    status: entry.status,
+    createdAt: entry.createdAt.toISOString(),
+    updatedAt: entry.updatedAt.toISOString(),
+  }));
 }
 
 async function findNextMatchingEntry(slot: AppointmentSlot): Promise<WaitlistEntry | null> {

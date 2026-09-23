@@ -4,6 +4,8 @@ export interface WaitlistEntryDto {
   id: string;
   clinicId: string;
   patientId: string;
+  patientName: string;
+  patientPhone: string;
   desiredStart: string;
   desiredEnd: string;
   status: WaitlistStatus;
