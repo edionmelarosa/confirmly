@@ -49,6 +49,7 @@ export default function SmsLogsPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch on mount
     fetchLogs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
