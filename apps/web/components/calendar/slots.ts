@@ -1,5 +1,5 @@
 import type { AppointmentDto } from "@confirmly/shared-types";
-import { DAY_END_HOUR, DAY_START_HOUR, SLOT_MINUTES, type Slot } from "./types";
+import { DAY_END_HOUR, DAY_START_HOUR, SLOT_MINUTES, type DaySchedule } from "./types";
 
 function isSameDay(a: Date, b: Date): boolean {
   return (
@@ -9,8 +9,8 @@ function isSameDay(a: Date, b: Date): boolean {
   );
 }
 
-export function buildSlotsForDay(day: Date, appointments: AppointmentDto[]): Slot[] {
-  const slots: Slot[] = [];
+export function buildSlotsForDay(day: Date, appointments: AppointmentDto[]): DaySchedule {
+  const slots = [];
   const dayStart = new Date(day);
   dayStart.setHours(DAY_START_HOUR, 0, 0, 0);
 
@@ -29,16 +29,20 @@ export function buildSlotsForDay(day: Date, appointments: AppointmentDto[]): Slo
     const startsAt = new Date(dayStart.getTime() + i * SLOT_MINUTES * 60_000);
     const endsAt = new Date(startsAt.getTime() + SLOT_MINUTES * 60_000);
 
-    const appointment =
-      appointmentsForDay.find((appt) => {
-        const apptStart = new Date(appt.startsAt);
-        return apptStart >= startsAt && apptStart < endsAt;
-      }) ?? null;
+    const slotAppointments = appointmentsForDay.filter((appt) => {
+      const apptStart = new Date(appt.startsAt);
+      return apptStart >= startsAt && apptStart < endsAt;
+    });
 
-    slots.push({ startsAt, endsAt, appointment });
+    slots.push({ startsAt, endsAt, appointments: slotAppointments });
   }
 
-  return slots;
+  const outsideHoursAppointments = appointmentsForDay.filter((appt) => {
+    const apptStart = new Date(appt.startsAt);
+    return apptStart < dayStart || apptStart >= dayEnd;
+  });
+
+  return { slots, outsideHoursAppointments };
 }
 
 export function formatSlotTime(date: Date): string {
