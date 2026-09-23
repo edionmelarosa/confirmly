@@ -14,7 +14,7 @@ type ViewState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "ready"; session: PatientSessionResponse }
-  | { status: "rescheduled" }
+  | { status: "rescheduled"; newTime: string; timezone: string }
   | { status: "claimed" };
 
 export function PatientSessionView({ token }: PatientSessionViewProps) {
@@ -42,10 +42,29 @@ export function PatientSessionView({ token }: PatientSessionViewProps) {
   }
 
   if (state.status === "rescheduled") {
+    const newTimeDate = new Date(state.newTime);
+    const formattedTime = newTimeDate.toLocaleString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: state.timezone,
+    });
+
     return (
-      <div className="text-center">
-        <p className="text-lg font-medium text-status-confirmed">Your appointment has been rescheduled.</p>
-        <p className="mt-2 text-neutral-600">A confirmation SMS has been sent to your phone.</p>
+      <div className="flex flex-col items-center gap-4 text-center">
+        <div>
+          <p className="text-lg font-medium text-status-confirmed">Your appointment has been rescheduled.</p>
+          <p className="mt-2 text-neutral-700">New time: {formattedTime}</p>
+          <p className="mt-1 text-sm text-neutral-600">A confirmation SMS has been sent to your phone.</p>
+        </div>
+        <button
+          onClick={() => window.close()}
+          className="rounded-lg bg-brand-600 px-6 py-2 font-medium text-white hover:bg-brand-700"
+        >
+          Done
+        </button>
       </div>
     );
   }
@@ -66,6 +85,12 @@ export function PatientSessionView({ token }: PatientSessionViewProps) {
   }
 
   return (
-    <RescheduleView token={token} session={state.session} onRescheduled={() => setState({ status: "rescheduled" })} />
+    <RescheduleView
+      token={token}
+      session={state.session}
+      onRescheduled={(newTime: string) =>
+        setState({ status: "rescheduled", newTime, timezone: state.session.clinic.timezone })
+      }
+    />
   );
 }
