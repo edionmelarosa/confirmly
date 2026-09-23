@@ -6,6 +6,7 @@ import type { SmsService } from "../services/sms";
 import { resolveAccessToken, markAccessTokenUsed } from "../services/tokens";
 import { appointmentsService, DoubleBookingError } from "../services/appointments";
 import { sessionsService, SessionFullError } from "../services/sessions";
+import { findUpcomingAppointment, PatientAlreadyBookedError } from "../services/patient-schedule";
 
 const SLOT_MINUTES = 30;
 const DAY_START_HOUR = 8;
@@ -122,6 +123,9 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
       });
       if (!patient || patient.clinicId !== record.clinicId) {
         return reply.code(410).send({ error: "gone", message: "Patient not found" });
+      }
+      if (await findUpcomingAppointment(prisma, patient.clinicId, patient.id)) {
+        throw new PatientAlreadyBookedError();
       }
 
       const response: PatientSessionResponse = {
@@ -382,15 +386,7 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
       }
 
       await markAccessTokenUsed(record.id);
-
-      await smsService.send({
-        clinicId: patient.clinicId,
-        to: patient.phone,
-        body: `Your appointment has been booked for ${appointment.startsAt.toLocaleString("en-PH", {
-          timeZone: patient.clinic.timezone,
-        })}. Reply C to confirm.`,
-        appointmentId: appointment.id,
-      });
+      // No booking SMS: the patient just saw the confirmation on screen, and the reminder follows.
 
       return reply.send({
         id: appointment.id,

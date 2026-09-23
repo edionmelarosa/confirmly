@@ -1,5 +1,6 @@
 import { prisma, Prisma } from "@confirmly/db";
 import type { AppointmentStatus } from "@confirmly/db";
+import { assertNoUpcomingAppointment, syncNextSchedule } from "./patient-schedule";
 
 export interface CreateAppointmentParams {
   clinicId: string;
@@ -43,8 +44,11 @@ function isExclusionViolation(err: unknown): boolean {
 }
 
 async function createAppointment(params: CreateAppointmentParams) {
+  await assertNoUpcomingAppointment(prisma, params.clinicId, params.patientId);
+
+  let appointment;
   try {
-    return await prisma.appointment.create({
+    appointment = await prisma.appointment.create({
       data: {
         clinicId: params.clinicId,
         patientId: params.patientId,
@@ -63,6 +67,9 @@ async function createAppointment(params: CreateAppointmentParams) {
     }
     throw err;
   }
+
+  await syncNextSchedule(appointment.id);
+  return appointment;
 }
 
 async function listAppointments(clinicId: string) {
@@ -84,6 +91,15 @@ async function updateAppointment(clinicId: string, id: string, params: UpdateApp
     return null;
   }
 
+  const reactivating =
+    params.status !== undefined &&
+    (params.status === "scheduled" || params.status === "confirmed") &&
+    existing.status !== "scheduled" &&
+    existing.status !== "confirmed";
+  if (reactivating) {
+    await assertNoUpcomingAppointment(prisma, clinicId, params.patientId ?? existing.patientId, id);
+  }
+
   let updated;
   try {
     updated = await prisma.appointment.update({
@@ -97,6 +113,9 @@ async function updateAppointment(clinicId: string, id: string, params: UpdateApp
     throw err;
   }
 
+  if (params.status !== undefined || params.startsAt !== undefined) {
+    await syncNextSchedule(updated.id);
+  }
   return updated;
 }
 
@@ -106,10 +125,12 @@ async function cancelAppointment(clinicId: string, id: string) {
     return null;
   }
 
-  return prisma.appointment.update({
+  const cancelled = await prisma.appointment.update({
     where: { id },
     data: { status: "cancelled" },
   });
+  await syncNextSchedule(cancelled.id);
+  return cancelled;
 }
 
 export const appointmentsService = {

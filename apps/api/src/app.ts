@@ -33,7 +33,7 @@ export function buildApp(env: Env, smsService: SmsService): FastifyInstance {
     app.log.error(error);
     const statusCode = error.statusCode ?? 500;
     return reply.code(statusCode).send({
-      error: "internal_error",
+      error: statusCode === 500 ? "internal_error" : (error.code ?? "error"),
       message: statusCode === 500 ? "Something went wrong" : error.message,
     });
   });
