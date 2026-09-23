@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarCheck, ClipboardList, UserX, AlarmClock } from "lucide-react";
-import type { AppointmentDto, WaitlistEntryDto } from "@confirmly/shared-types";
+import { CalendarCheck, UserX, AlarmClock } from "lucide-react";
+import type { AppointmentDto } from "@confirmly/shared-types";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -43,7 +43,6 @@ function startOfWeek(date: Date): Date {
 export default function DashboardPage() {
   const toast = useToast();
   const [appointments, setAppointments] = useState<AppointmentDto[] | null>(null);
-  const [waitlistEntries, setWaitlistEntries] = useState<WaitlistEntryDto[] | null>(null);
   const [patients, setPatients] = useState<Patient[] | null>(null);
 
   useEffect(() => {
@@ -51,14 +50,12 @@ export default function DashboardPage() {
 
     async function load() {
       try {
-        const [appts, waitlist, patientList] = await Promise.all([
+        const [appts, patientList] = await Promise.all([
           apiClient.get<AppointmentDto[]>("/appointments"),
-          apiClient.get<WaitlistEntryDto[]>("/waitlist"),
           apiClient.get<Patient[]>("/patients"),
         ]);
         if (cancelled) return;
         setAppointments(appts);
-        setWaitlistEntries(waitlist);
         setPatients(patientList);
       } catch (err) {
         if (cancelled) return;
@@ -73,13 +70,13 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch once on mount, not on toast identity
   }, []);
 
-  const loading = appointments === null || waitlistEntries === null || patients === null;
+  const loading = appointments === null || patients === null;
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-20 w-full" />
           ))}
         </div>
@@ -100,8 +97,6 @@ export default function DashboardPage() {
     (appt) => appt.status === "no_show" && new Date(appt.startsAt) >= weekStart,
   ).length;
 
-  const pendingWaitlistOffers = waitlistEntries.filter((entry) => entry.status === "offered").length;
-
   const next24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const unconfirmedNext24h = appointments.filter(
     (appt) =>
@@ -112,7 +107,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           label="Today's appointments"
           value={todaysAppointments.length}
@@ -125,13 +120,6 @@ export default function DashboardPage() {
           icon={UserX}
           tone="danger"
           href="/dashboard/appointments"
-        />
-        <StatCard
-          label="Pending waitlist offers"
-          value={pendingWaitlistOffers}
-          icon={ClipboardList}
-          tone="warning"
-          href="/dashboard/waitlist"
         />
         <StatCard
           label="Unconfirmed (next 24h)"

@@ -3,10 +3,14 @@ import { prisma, type AccessToken, type AccessTokenPurpose } from "@confirmly/db
 
 const RESCHEDULE_TOKEN_TTL_MS = 1000 * 60 * 60 * 48; // 48h
 const WAITLIST_CLAIM_TOKEN_TTL_MS = 1000 * 60 * 15; // 15min
+const MANAGE_TOKEN_TTL_MS = 1000 * 60 * 60 * 24; // 24h
+const INVITE_TO_BOOK_TOKEN_TTL_MS = 1000 * 60 * 60 * 24; // 24h
 
 export const TOKEN_TTL_MS_BY_PURPOSE: Record<AccessTokenPurpose, number> = {
   reschedule: RESCHEDULE_TOKEN_TTL_MS,
   waitlist_claim: WAITLIST_CLAIM_TOKEN_TTL_MS,
+  manage: MANAGE_TOKEN_TTL_MS,
+  invite_to_book: INVITE_TO_BOOK_TOKEN_TTL_MS,
 };
 
 export interface CreateAccessTokenParams {

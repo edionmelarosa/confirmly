@@ -84,13 +84,29 @@ export function PatientSessionView({ token }: PatientSessionViewProps) {
     );
   }
 
-  return (
-    <RescheduleView
-      token={token}
-      session={state.session}
-      onRescheduled={(newTime: string) =>
-        setState({ status: "rescheduled", newTime, timezone: state.session.clinic.timezone })
-      }
-    />
-  );
+  if (state.session.purpose === "manage" || state.session.purpose === "reschedule") {
+    return (
+      <RescheduleView
+        token={token}
+        session={state.session}
+        onRescheduled={(newTime: string) =>
+          setState({ status: "rescheduled", newTime, timezone: state.session.clinic.timezone })
+        }
+      />
+    );
+  }
+
+  if (state.session.purpose === "invite_to_book") {
+    return (
+      <RescheduleView
+        token={token}
+        session={state.session}
+        onRescheduled={(newTime: string) =>
+          setState({ status: "rescheduled", newTime, timezone: state.session.clinic.timezone })
+        }
+      />
+    );
+  }
+
+  return null;
 }

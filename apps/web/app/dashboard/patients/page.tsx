@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { UserPlus, Search } from "lucide-react";
+import { UserPlus, Search, Send } from "lucide-react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -27,7 +27,11 @@ export default function PatientsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [scheduleType, setScheduleType] = useState("");
+  const [nextSchedule, setNextSchedule] = useState("");
+  const [service, setService] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [invitingPatientId, setInvitingPatientId] = useState<string | null>(null);
 
   async function load() {
     try {
@@ -56,16 +60,36 @@ export default function PatientsPage() {
     event.preventDefault();
     setSubmitting(true);
     try {
-      await apiClient.post("/patients", { name, phone, mode: "create" });
+      const payload: any = { name, phone, mode: "create" };
+      if (scheduleType) payload.scheduleType = scheduleType;
+      if (nextSchedule) payload.nextSchedule = new Date(nextSchedule).toISOString();
+      if (service) payload.service = service;
+      
+      await apiClient.post("/patients", payload);
       toast.success("Client added.");
       setAddOpen(false);
       setName("");
       setPhone("");
+      setScheduleType("");
+      setNextSchedule("");
+      setService("");
       await load();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Something went wrong");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleInviteToBook(patientId: string) {
+    setInvitingPatientId(patientId);
+    try {
+      await apiClient.post(`/patients/${patientId}/invite-to-book`, {});
+      toast.success("Booking link sent via SMS.");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to send invite");
+    } finally {
+      setInvitingPatientId(null);
     }
   }
 
@@ -109,12 +133,14 @@ export default function PatientsPage() {
                 <th className="px-3 py-2">Phone</th>
                 <th className="px-3 py-2">Next appointment</th>
                 <th className="px-3 py-2">Recurrence</th>
+                <th className="px-3 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((p) => {
                 const next = p.appointments[0];
                 const rule = p.recurrenceRules[0];
+                const hasNoAppointment = !next;
                 return (
                   <tr key={p.id} className="border-b border-neutral-100 text-sm hover:bg-brand-50/40">
                     <td className="px-3 py-2 font-medium text-neutral-900">
@@ -138,6 +164,20 @@ export default function PatientsPage() {
                         </Badge>
                       ) : (
                         <span className="text-neutral-400">None</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {hasNoAppointment && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => handleInviteToBook(p.id)}
+                          disabled={invitingPatientId === p.id}
+                        >
+                          <Send className="h-3 w-3" />
+                          {invitingPatientId === p.id ? "Sending..." : "Invite to book"}
+                        </Button>
                       )}
                     </td>
                   </tr>
@@ -166,6 +206,30 @@ export default function PatientsPage() {
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+639171234567"
                   required
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                Schedule type / occurrence
+                <Input
+                  value={scheduleType}
+                  onChange={(e) => setScheduleType(e.target.value)}
+                  placeholder="e.g. Every 3 months"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                Next schedule
+                <Input
+                  type="date"
+                  value={nextSchedule}
+                  onChange={(e) => setNextSchedule(e.target.value)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                Service
+                <Input
+                  value={service}
+                  onChange={(e) => setService(e.target.value)}
+                  placeholder="e.g. Cleaning, Extraction"
                 />
               </label>
             </DialogBody>

@@ -34,6 +34,7 @@ model Clinic {
   timezone           String
   smsSenderName      String         @map("sms_sender_name")
   reminderLeadHours  Int            @default(24) @map("reminder_lead_hours")
+  reminderLeadDays   Int            @default(1) @map("reminder_lead_days")
   subscriptionStatus String         @map("subscription_status")
   schedulingMode     SchedulingMode @default(fixed_time) @map("scheduling_mode")
   sessionCapacityAm  Int?           @map("session_capacity_am")
@@ -82,12 +83,16 @@ model Session {
 }
 
 model Patient {
-  id        String   @id @default(cuid())
-  clinicId  String   @map("clinic_id")
-  name      String
-  phone     String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id              String    @id @default(cuid())
+  clinicId        String    @map("clinic_id")
+  name            String
+  phone           String
+  scheduleType    String?   @map("schedule_type")
+  scheduleDetails String?   @map("schedule_details")
+  nextSchedule    DateTime? @map("next_schedule")
+  service         String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   clinic          Clinic           @relation(fields: [clinicId], references: [id])
   appointments    Appointment[]
@@ -190,6 +195,8 @@ model WaitlistEntry {
 enum AccessTokenPurpose {
   reschedule
   waitlist_claim
+  manage
+  invite_to_book
 }
 
 model AccessToken {

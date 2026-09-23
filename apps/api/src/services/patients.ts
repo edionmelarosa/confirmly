@@ -4,6 +4,10 @@ export interface FindOrCreatePatientParams {
   clinicId: string;
   name: string;
   phone: string;
+  scheduleType?: string;
+  scheduleDetails?: string;
+  nextSchedule?: Date;
+  service?: string;
 }
 
 export class PatientPhoneTakenError extends Error {
@@ -22,7 +26,15 @@ async function findOrCreatePatient(params: FindOrCreatePatientParams) {
   }
 
   return prisma.patient.create({
-    data: params,
+    data: {
+      clinicId: params.clinicId,
+      name: params.name,
+      phone: params.phone,
+      scheduleType: params.scheduleType,
+      scheduleDetails: params.scheduleDetails,
+      nextSchedule: params.nextSchedule,
+      service: params.service,
+    },
   });
 }
 
@@ -33,7 +45,17 @@ async function createPatientStrict(params: FindOrCreatePatientParams) {
   if (existing) {
     throw new PatientPhoneTakenError();
   }
-  return prisma.patient.create({ data: params });
+  return prisma.patient.create({
+    data: {
+      clinicId: params.clinicId,
+      name: params.name,
+      phone: params.phone,
+      scheduleType: params.scheduleType,
+      scheduleDetails: params.scheduleDetails,
+      nextSchedule: params.nextSchedule,
+      service: params.service,
+    },
+  });
 }
 
 async function listPatients(clinicId: string) {

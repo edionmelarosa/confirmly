@@ -21,6 +21,19 @@ export interface RescheduleSessionResponse {
   clinic: PatientSessionClinicDto;
 }
 
+export interface ManageSessionResponse {
+  purpose: "manage";
+  appointment: PatientSessionAppointmentDto;
+  clinic: PatientSessionClinicDto;
+}
+
+export interface InviteToBookSessionResponse {
+  purpose: "invite_to_book";
+  clinic: PatientSessionClinicDto;
+  patientId: string;
+  patientName: string;
+}
+
 export interface WaitlistClaimSessionResponse {
   purpose: "waitlist_claim";
   clinic: PatientSessionClinicDto;
@@ -28,7 +41,11 @@ export interface WaitlistClaimSessionResponse {
   desiredEnd: string;
 }
 
-export type PatientSessionResponse = RescheduleSessionResponse | WaitlistClaimSessionResponse;
+export type PatientSessionResponse = 
+  | RescheduleSessionResponse 
+  | ManageSessionResponse 
+  | InviteToBookSessionResponse 
+  | WaitlistClaimSessionResponse;
 
 export interface TimedAvailableSlotDto {
   kind: "timed";

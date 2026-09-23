@@ -76,7 +76,7 @@ async function buildAvailableSlots(clinicId: string, resourceId: string | null):
   return slots;
 }
 
-export function registerPatientSessionRoutes(app: FastifyInstance, smsService: SmsService): void {
+export function registerPatientSessionRoutes(app: FastifyInstance, smsService: SmsService, env: any): void {
   app.get<{ Params: { token: string } }>("/api/patient/session/:token", async (request, reply) => {
     const resolved = await resolveAccessToken(request.params.token);
 
@@ -111,6 +111,33 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
       return reply.send(response);
     }
 
+    if (record.purpose === "invite_to_book") {
+      const patientId = record.appointmentId;
+      if (!patientId) {
+        return reply.code(410).send({ error: "gone", message: "This link is no longer valid" });
+      }
+
+      const patient = await prisma.patient.findUnique({
+        where: { id: patientId },
+        include: { clinic: true },
+      });
+      if (!patient) {
+        return reply.code(410).send({ error: "gone", message: "Patient not found" });
+      }
+
+      const response: PatientSessionResponse = {
+        purpose: "invite_to_book",
+        clinic: {
+          name: patient.clinic.name,
+          timezone: patient.clinic.timezone,
+          schedulingMode: patient.clinic.schedulingMode,
+        },
+        patientId: patient.id,
+        patientName: patient.name,
+      };
+      return reply.send(response);
+    }
+
     if (!record.appointmentId) {
       return reply.code(410).send({ error: "gone", message: "This link is no longer valid" });
     }
@@ -123,8 +150,10 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
       return reply.code(410).send({ error: "gone", message: "Appointment no longer exists" });
     }
 
+    const purpose = record.purpose === "manage" ? "manage" : "reschedule";
+
     const response: PatientSessionResponse = {
-      purpose: "reschedule",
+      purpose,
       appointment: {
         id: appointment.id,
         startsAt: appointment.startsAt.toISOString(),
@@ -138,8 +167,6 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
         timezone: appointment.clinic.timezone,
         schedulingMode: appointment.clinic.schedulingMode,
       },
-      // appointment session fields included for patient UI
-
     };
 
     return reply.send(response);
@@ -235,6 +262,125 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
         startsAt: updated.startsAt.toISOString(),
         endsAt: updated.endsAt.toISOString(),
         status: updated.status,
+      });
+    } catch (err) {
+      if (err instanceof SessionFullError) {
+        return reply.code(409).send({ error: "session_full", message: err.message });
+      }
+      if (err instanceof DoubleBookingError) {
+        return reply.code(409).send({ error: "double_booking", message: err.message });
+      }
+      throw err;
+    }
+  });
+
+  app.post<{ Params: { token: string } }>("/api/patient/session/:token/cancel", async (request, reply) => {
+    const resolved = await resolveAccessToken(request.params.token);
+    if (resolved.state !== "valid" || !resolved.record?.appointmentId) {
+      return reply.code(410).send({ error: "gone", message: "This link has expired or was already used" });
+    }
+
+    const record = resolved.record;
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: record.appointmentId! },
+      include: { clinic: true, patient: true },
+    });
+    if (!appointment) {
+      return reply.code(410).send({ error: "gone", message: "Appointment no longer exists" });
+    }
+
+    const cancelled = await appointmentsService.cancelAppointment(appointment.clinicId, appointment.id);
+    if (!cancelled) {
+      return reply.code(410).send({ error: "gone", message: "Appointment could not be cancelled" });
+    }
+
+    await markAccessTokenUsed(record.id);
+
+    await smsService.send({
+      clinicId: appointment.clinicId,
+      to: appointment.patient!.phone,
+      body: `Your appointment on ${appointment.startsAt.toLocaleString("en-PH", {
+        timeZone: appointment.clinic!.timezone,
+      })} has been cancelled.`,
+      appointmentId: appointment.id,
+    });
+
+    return reply.send({ status: "cancelled", message: "Appointment cancelled successfully" });
+  });
+
+  app.post<{ Params: { token: string } }>("/api/patient/session/:token/book", async (request, reply) => {
+    const body = rescheduleSchema.safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: "invalid_request", message: body.error.message });
+    }
+
+    const resolved = await resolveAccessToken(request.params.token);
+    if (resolved.state !== "valid" || resolved.record?.purpose !== "invite_to_book") {
+      return reply.code(410).send({ error: "gone", message: "This link has expired or was already used" });
+    }
+
+    const record = resolved.record;
+    const patientId = record.appointmentId;
+    if (!patientId) {
+      return reply.code(410).send({ error: "gone", message: "This link is no longer valid" });
+    }
+
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId },
+      include: { clinic: true },
+    });
+    if (!patient) {
+      return reply.code(410).send({ error: "gone", message: "Patient not found" });
+    }
+
+    try {
+      let appointment;
+      if (patient.clinic.schedulingMode === "session_capacity") {
+        if (!body.data.date || !body.data.sessionOfDay) {
+          return reply.code(400).send({
+            error: "invalid_request",
+            message: "date and sessionOfDay are required for session-based booking",
+          });
+        }
+        appointment = await sessionsService.bookSessionCapacitySlot({
+          clinicId: patient.clinicId,
+          patientId: patient.id,
+          date: body.data.date,
+          sessionOfDay: body.data.sessionOfDay,
+          resourceId: null,
+        });
+      } else {
+        if (!body.data.startsAt || !body.data.endsAt) {
+          return reply.code(400).send({
+            error: "invalid_request",
+            message: "startsAt and endsAt are required",
+          });
+        }
+        appointment = await appointmentsService.createAppointment({
+          clinicId: patient.clinicId,
+          patientId: patient.id,
+          resourceId: null,
+          startsAt: body.data.startsAt,
+          endsAt: body.data.endsAt,
+        });
+      }
+
+      await markAccessTokenUsed(record.id);
+
+      await smsService.send({
+        clinicId: patient.clinicId,
+        to: patient.phone,
+        body: `Your appointment has been booked for ${appointment.startsAt.toLocaleString("en-PH", {
+          timeZone: patient.clinic.timezone,
+        })}. Reply C to confirm.`,
+        appointmentId: appointment.id,
+      });
+
+      return reply.send({
+        id: appointment.id,
+        startsAt: appointment.startsAt.toISOString(),
+        endsAt: appointment.endsAt.toISOString(),
+        status: appointment.status,
       });
     } catch (err) {
       if (err instanceof SessionFullError) {

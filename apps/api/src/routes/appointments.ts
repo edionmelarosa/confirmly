@@ -8,6 +8,8 @@ import { slotFromAppointment, type WaitlistService } from "../services/waitlist"
 import type { SmsService } from "../services/sms";
 import { renderReminderSms } from "../templates/sms";
 import { recurrenceService } from "../services/recurrence";
+import { createAccessToken } from "../services/tokens";
+import type { Env } from "../env";
 
 const fixedCreateSchema = z.object({
   mode: z.literal("fixed_time").optional(),
@@ -42,6 +44,7 @@ export function registerAppointmentRoutes(
   app: FastifyInstance,
   waitlistService: WaitlistService,
   smsService: SmsService,
+  env: Env,
 ): void {
   app.addHook("preHandler", requireAuth);
 
@@ -168,7 +171,6 @@ export function registerAppointmentRoutes(
     if (!cancelled) {
       return reply.code(404).send({ error: "not_found", message: "Appointment not found" });
     }
-    await waitlistService.checkWaitlistFill(slotFromAppointment(cancelled));
     return reply.send(cancelled);
   });
 
@@ -184,10 +186,24 @@ export function registerAppointmentRoutes(
       prisma.patient.findUniqueOrThrow({ where: { id: appointment.patientId } }),
     ]);
 
+    const { token } = await createAccessToken({
+      purpose: "manage",
+      appointmentId: appointment.id,
+    });
+
+    const manageLink = `${env.WEB_ORIGIN}/c/${token}`;
+
     const body = renderReminderSms({
       clinicName: clinic.name,
       clinicTimezone: clinic.timezone,
       startsAt: appointment.startsAt,
+      schedulingMode: clinic.schedulingMode,
+      sessionOfDay: appointment.sessionOfDay,
+      sessionAmStartHour: clinic.sessionAmStartHour,
+      sessionAmEndHour: clinic.sessionAmEndHour,
+      sessionPmStartHour: clinic.sessionPmStartHour,
+      sessionPmEndHour: clinic.sessionPmEndHour,
+      manageLink,
     });
 
     const result = await smsService.send({

@@ -119,6 +119,17 @@ export function SessionCapacityView() {
     }
   }
 
+  async function cancelAppointment(id: string) {
+    if (!confirm("Cancel this appointment?")) return;
+    try {
+      await apiClient.post(`/appointments/${id}/cancel`);
+      toast.success("Appointment cancelled.");
+      await fetchAll();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Something went wrong");
+    }
+  }
+
   if (!appointments || !settings) {
     return (
       <div className="space-y-2">
@@ -196,14 +207,17 @@ export function SessionCapacityView() {
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge status={a.status}>{a.status.replace("_", " ")}</Badge>
-                          <Button type="button" size="sm" variant="secondary" onClick={() => resendReminder(a.id)}>
+                          <Button type="button" size="sm" variant="secondary" onClick={() => resendReminder(a.id)} disabled={a.status === "cancelled"}>
                             Send reminder
                           </Button>
-                          <Button type="button" size="sm" variant="secondary" onClick={() => markStatus(a.id, "completed")}>
+                          <Button type="button" size="sm" variant="secondary" onClick={() => markStatus(a.id, "completed")} disabled={a.status === "cancelled"}>
                             Complete
                           </Button>
-                          <Button type="button" size="sm" variant="secondary" onClick={() => markStatus(a.id, "no_show")}>
+                          <Button type="button" size="sm" variant="secondary" onClick={() => markStatus(a.id, "no_show")} disabled={a.status === "cancelled"}>
                             No-show
+                          </Button>
+                          <Button type="button" size="sm" variant="destructive" onClick={() => cancelAppointment(a.id)} disabled={a.status === "cancelled"}>
+                            Cancel
                           </Button>
                         </div>
                       </li>

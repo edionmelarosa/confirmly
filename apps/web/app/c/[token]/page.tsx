@@ -1,6 +1,6 @@
 import { PatientSessionView } from "@/components/patient/PatientSessionView";
 
-export default async function PatientSessionPage(props: PageProps<"/c/[token]">) {
+export default async function PatientSessionPage(props: { params: Promise<{ token: string }> }) {
   const { token } = await props.params;
 
   return (

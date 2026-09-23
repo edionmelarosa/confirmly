@@ -47,10 +47,10 @@ export function buildApp(env: Env, smsService: SmsService): FastifyInstance {
   const inboundSmsHandler = createInboundSmsHandler(env, smsService, waitlistService);
 
   registerAuthRoutes(app);
-  app.register(async (instance) => registerAppointmentRoutes(instance, waitlistService, smsService));
-  app.register(async (instance) => registerPatientRoutes(instance));
+  app.register(async (instance) => registerAppointmentRoutes(instance, waitlistService, smsService, env));
+  app.register(async (instance) => registerPatientRoutes(instance, smsService, env));
   app.register(async (instance) => registerSmsWebhookRoutes(instance, inboundSmsHandler));
-  app.register(async (instance) => registerPatientSessionRoutes(instance, smsService));
+  app.register(async (instance) => registerPatientSessionRoutes(instance, smsService, env));
   app.register(async (instance) => registerWaitlistRoutes(instance, waitlistService));
   app.register(async (instance) => registerClinicSettingsRoutes(instance));
   app.register(async (instance) => registerRecurrenceRoutes(instance));

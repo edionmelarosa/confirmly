@@ -12,7 +12,7 @@ app
   .listen({ port: env.PORT, host: "0.0.0.0" })
   .then((address) => {
     app.log.info(`confirmly api listening on ${address}`);
-    startReminderDispatchJob(smsService);
+    startReminderDispatchJob(smsService, env);
   })
   .catch((err) => {
     app.log.error(err);
