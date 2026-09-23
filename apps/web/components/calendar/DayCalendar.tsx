@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, CalendarX2 } from "lucide-react";
+import { RefreshCw, CalendarX2, Clock } from "lucide-react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { AppointmentDto } from "@confirmly/shared-types";
 import { AppointmentForm } from "./AppointmentForm";
@@ -21,6 +21,7 @@ export function DayCalendar() {
   const [day, setDay] = useState(() => new Date());
   const [appointments, setAppointments] = useState<AppointmentDto[] | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentDto | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchAppointments = useCallback(async () => {
@@ -55,8 +56,8 @@ export function DayCalendar() {
   }
 
   const loading = appointments === null;
-  const slots = loading ? [] : buildSlotsForDay(day, appointments);
-  const bookedCount = slots.filter((slot) => slot.appointment !== null).length;
+  const schedule = loading ? { slots: [], outsideHoursAppointments: [] } : buildSlotsForDay(day, appointments);
+  const totalBooked = schedule.slots.reduce((sum, slot) => sum + slot.appointments.length, 0) + schedule.outsideHoursAppointments.length;
 
   return (
     <div>
@@ -83,7 +84,7 @@ export function DayCalendar() {
         </div>
       ) : (
         <>
-          {bookedCount === 0 && (
+          {totalBooked === 0 && (
             <div className="mb-4 max-w-md">
               <EmptyState
                 icon={<CalendarX2 className="h-8 w-8" />}
@@ -93,21 +94,78 @@ export function DayCalendar() {
             </div>
           )}
 
+          {schedule.outsideHoursAppointments.length > 0 && (
+            <div className="mb-4 max-w-md rounded-md border border-amber-200 bg-amber-50 p-3">
+              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-amber-900">
+                <Clock className="h-4 w-4" />
+                Other times this day
+              </div>
+              <div className="flex flex-col gap-1">
+                {schedule.outsideHoursAppointments.map((appt) => (
+                  <button
+                    key={appt.id}
+                    type="button"
+                    onClick={() => setSelectedAppointment(appt)}
+                    className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-white px-3 py-2 text-left text-sm hover:border-amber-300 hover:bg-amber-50"
+                  >
+                    <span className="font-medium text-neutral-700">
+                      {new Date(appt.startsAt).toLocaleTimeString(undefined, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    <Badge status={appt.status}>{appt.status.replace("_", " ")}</Badge>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex max-w-md flex-col gap-1">
-            {slots.map((slot) => (
-              <button
-                key={slot.startsAt.toISOString()}
-                type="button"
-                onClick={() => setSelectedSlot(slot)}
-                className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 px-3 py-2 text-left text-sm hover:border-brand-300 hover:bg-brand-50"
-              >
-                <span className="font-medium text-neutral-700">{formatSlotTime(slot.startsAt)}</span>
-                {slot.appointment ? (
-                  <Badge status={slot.appointment.status}>{slot.appointment.status.replace("_", " ")}</Badge>
+            {schedule.slots.map((slot) => (
+              <div key={slot.startsAt.toISOString()}>
+                {slot.appointments.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSlot(slot)}
+                    className="flex w-full items-center justify-between gap-3 rounded-md border border-neutral-200 px-3 py-2 text-left text-sm hover:border-brand-300 hover:bg-brand-50"
+                  >
+                    <span className="font-medium text-neutral-700">{formatSlotTime(slot.startsAt)}</span>
+                    <span className="text-neutral-500">Open</span>
+                  </button>
                 ) : (
-                  <span className="text-neutral-500">Open</span>
+                  <div className="rounded-md border border-neutral-200">
+                    <div className="border-b border-neutral-200 bg-neutral-50 px-3 py-1">
+                      <span className="text-sm font-medium text-neutral-700">{formatSlotTime(slot.startsAt)}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      {slot.appointments.map((appt) => (
+                        <button
+                          key={appt.id}
+                          type="button"
+                          onClick={() => setSelectedAppointment(appt)}
+                          className="flex items-center justify-between gap-3 border-b border-neutral-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-brand-50"
+                        >
+                          <span className="text-neutral-700">
+                            {new Date(appt.startsAt).toLocaleTimeString(undefined, {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          <Badge status={appt.status}>{appt.status.replace("_", " ")}</Badge>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSlot(slot)}
+                        className="px-3 py-2 text-left text-sm text-brand-600 hover:bg-brand-50 hover:text-brand-700"
+                      >
+                        + Book another in this slot
+                      </button>
+                    </div>
+                  </div>
                 )}
-              </button>
+              </div>
             ))}
           </div>
         </>
@@ -117,10 +175,23 @@ export function DayCalendar() {
         <AppointmentForm
           startsAt={selectedSlot.startsAt}
           endsAt={selectedSlot.endsAt}
-          existing={selectedSlot.appointment}
+          existing={null}
           onClose={() => setSelectedSlot(null)}
           onSaved={() => {
             setSelectedSlot(null);
+            fetchAppointments();
+          }}
+        />
+      )}
+
+      {selectedAppointment && (
+        <AppointmentForm
+          startsAt={new Date(selectedAppointment.startsAt)}
+          endsAt={new Date(selectedAppointment.endsAt)}
+          existing={selectedAppointment}
+          onClose={() => setSelectedAppointment(null)}
+          onSaved={() => {
+            setSelectedAppointment(null);
             fetchAppointments();
           }}
         />
