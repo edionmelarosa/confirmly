@@ -9,10 +9,24 @@ export interface PatientSessionAppointmentDto {
   isSessionCapacity?: boolean;
 }
 
+export interface SessionHoursDto {
+  am: { startHour: number; endHour: number };
+  pm: { startHour: number; endHour: number };
+}
+
+export interface BusinessHoursDto {
+  /** JS weekday numbers, 0 = Sunday … 6 = Saturday. */
+  openDays: number[];
+  openHour: number;
+  closeHour: number;
+}
+
 export interface PatientSessionClinicDto {
   name: string;
   timezone: string;
   schedulingMode?: "fixed_time" | "session_capacity";
+  sessionHours?: SessionHoursDto;
+  businessHours?: BusinessHoursDto;
 }
 
 export interface RescheduleSessionResponse {

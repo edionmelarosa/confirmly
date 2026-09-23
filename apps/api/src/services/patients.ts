@@ -59,6 +59,14 @@ async function createPatientStrict(params: FindOrCreatePatientParams) {
   });
 }
 
+export function activeInviteWhere(now = new Date()) {
+  return {
+    purpose: "invite_to_book",
+    usedAt: null,
+    expiresAt: { gt: now },
+  } satisfies Prisma.AccessTokenWhereInput;
+}
+
 async function listPatients(clinicId: string) {
   const clinic = await prisma.clinic.findUniqueOrThrow({ where: { id: clinicId } });
   return prisma.patient.findMany({
@@ -70,6 +78,13 @@ async function listPatients(clinicId: string) {
         where: upcomingAppointmentWhere(clinic.timezone),
         orderBy: { startsAt: "asc" },
         take: 1,
+      },
+      // Unused, unexpired invite links — while one exists, staff shouldn't send another.
+      accessTokens: {
+        where: activeInviteWhere(),
+        orderBy: { expiresAt: "desc" },
+        take: 1,
+        select: { createdAt: true, expiresAt: true },
       },
       recurrenceRules: {
         where: { status: { in: ["active", "paused"] } },

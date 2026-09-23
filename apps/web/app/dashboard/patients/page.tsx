@@ -29,6 +29,8 @@ interface PatientRow {
     sessionOfDay: "am" | "pm" | null;
   }[];
   recurrenceRules: { status: string; ruleType: string }[];
+  // Pending (unused, unexpired) invite-to-book link, if any.
+  accessTokens: { createdAt: string; expiresAt: string }[];
 }
 
 type CadenceOption = "none" | "every_3_weeks" | "every_month" | "every_day_of_month";
@@ -197,9 +199,12 @@ export default function PatientsPage() {
     try {
       await apiClient.post(`/patients/${patientId}/invite-to-book`, {});
       toast.success("Booking link sent via SMS.");
+      await load();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to send invite");
-      if (err instanceof ApiError && err.code === "already_booked") await load();
+      if (err instanceof ApiError && (err.code === "already_booked" || err.code === "invite_already_sent")) {
+        await load();
+      }
     } finally {
       setInvitingPatientId(null);
     }
@@ -254,6 +259,7 @@ export default function PatientsPage() {
             <tbody>
               {filtered.map((p) => {
                 const booking = p.appointments[0];
+                const pendingInvite = p.accessTokens[0];
                 const rule = p.recurrenceRules[0];
                 const nextDue = p.nextSchedule && toDateInputValue(new Date(p.nextSchedule)) <= today;
                 return (
@@ -296,7 +302,21 @@ export default function PatientsPage() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-2">
-                        {!booking && (
+                        {!booking && pendingInvite && (
+                          <span
+                            className="text-xs text-neutral-500"
+                            title={`Sent ${new Date(pendingInvite.createdAt).toLocaleString()}`}
+                          >
+                            Invite sent · expires{" "}
+                            {new Date(pendingInvite.expiresAt).toLocaleString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        )}
+                        {!booking && !pendingInvite && (
                           <Button
                             type="button"
                             size="sm"

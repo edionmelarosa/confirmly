@@ -107,8 +107,9 @@ async function resolveCadence(clinicId: string, patientId: string, scheduleDetai
 /**
  * Keeps Patient.nextSchedule in step with the appointment lifecycle for patients that have a cadence:
  * - booked (scheduled/confirmed) or completed → the visit date + cadence
- * - cancelled / no-show → the missed visit date, i.e. the patient is due and needs rebooking
- * Patients without a cadence keep whatever staff set manually.
+ * - cancelled → the missed visit date, i.e. the patient is due and needs rebooking
+ * - no-show → cleared (any patient); staff decide when to follow up
+ * Patients without a cadence otherwise keep whatever staff set manually.
  */
 export async function syncNextSchedule(appointmentId: string): Promise<void> {
   const appointment = await prisma.appointment.findUnique({
@@ -116,6 +117,11 @@ export async function syncNextSchedule(appointmentId: string): Promise<void> {
     include: { patient: true },
   });
   if (!appointment) return;
+
+  if (appointment.status === "no_show") {
+    await prisma.patient.update({ where: { id: appointment.patientId }, data: { nextSchedule: null } });
+    return;
+  }
 
   const cadence = await resolveCadence(
     appointment.clinicId,
@@ -125,7 +131,7 @@ export async function syncNextSchedule(appointmentId: string): Promise<void> {
   if (!cadence) return;
 
   const nextSchedule =
-    appointment.status === "cancelled" || appointment.status === "no_show"
+    appointment.status === "cancelled"
       ? appointment.startsAt
       : applyCadence(cadence, appointment.startsAt);
 

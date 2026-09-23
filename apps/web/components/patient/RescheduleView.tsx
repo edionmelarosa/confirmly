@@ -1,9 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Clock } from "lucide-react";
 import { apiClient, ApiError } from "@/lib/api-client";
-import type { AvailableSlotDto, RescheduleSessionResponse, ManageSessionResponse, InviteToBookSessionResponse } from "@confirmly/shared-types";
-import { formatInClinicTz } from "./format";
+import type {
+  AvailableSlotDto,
+  RescheduleSessionResponse,
+  ManageSessionResponse,
+  InviteToBookSessionResponse,
+  SessionAvailableSlotDto,
+  SessionOfDay,
+} from "@confirmly/shared-types";
+import {
+  describeSlot,
+  formatBusinessHours,
+  formatInClinicTz,
+  formatTime,
+  formatYmd,
+  sessionHoursLabel,
+  sessionName,
+  slotYmd,
+  ymdInTz,
+} from "./format";
 import { PatientButton } from "./PatientButton";
 
 type SupportedSession = RescheduleSessionResponse | ManageSessionResponse | InviteToBookSessionResponse;
@@ -11,208 +29,336 @@ type SupportedSession = RescheduleSessionResponse | ManageSessionResponse | Invi
 interface RescheduleViewProps {
   token: string;
   session: SupportedSession;
-  onRescheduled: (newTime: string) => void;
+  onRescheduled: (newTime: string, slot?: AvailableSlotDto) => void;
+}
+
+// Invite links go straight to the picker; manage/reschedule links first show the current appointment.
+type Step = "overview" | "pick" | "confirm";
+
+function slotKey(slot: AvailableSlotDto): string {
+  return slot.kind === "session" ? `${slot.date}-${slot.sessionOfDay}` : slot.startsAt;
 }
 
 export function RescheduleView({ token, session, onRescheduled }: RescheduleViewProps) {
-  const [slots, setSlots] = useState<AvailableSlotDto[]>([]);
-  const [showSlots, setShowSlots] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
-  const appointment = session.purpose === "invite_to_book" ? undefined : session.appointment;
+  const isBooking = session.purpose === "invite_to_book";
+  const appointment = isBooking ? undefined : session.appointment;
   const clinic = session.clinic;
+  const timeZone = clinic.timezone;
 
-  async function loadSlots() {
-    setShowSlots(true);
+  const [step, setStep] = useState<Step>(isBooking ? "pick" : "overview");
+  const [slots, setSlots] = useState<AvailableSlotDto[] | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<AvailableSlotDto | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadSlots = useCallback(async () => {
     try {
       const result = await apiClient.get<{ slots: AvailableSlotDto[] }>(`/api/patient/session/${token}/slots`);
       setSlots(result.slots);
     } catch {
-      setSubmitError("Couldn't load available times. Please try again.");
+      setError("Couldn't load available dates. Please try again.");
+      setSlots([]);
     }
+  }, [token]);
+
+  useEffect(() => {
+    if (step === "pick" && slots === null) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch; state is set after the request resolves
+      loadSlots();
+    }
+  }, [step, slots, loadSlots]);
+
+  const slotsByDate = useMemo(() => {
+    const grouped = new Map<string, AvailableSlotDto[]>();
+    for (const slot of slots ?? []) {
+      const ymd = slotYmd(slot, timeZone);
+      grouped.set(ymd, [...(grouped.get(ymd) ?? []), slot]);
+    }
+    return grouped;
+  }, [slots, timeZone]);
+
+  const dates = Array.from(slotsByDate.keys());
+  const activeDate = selectedDate && slotsByDate.has(selectedDate) ? selectedDate : (dates[0] ?? null);
+  const daySlots = activeDate ? (slotsByDate.get(activeDate) ?? []) : [];
+
+  function chooseSlot(slot: AvailableSlotDto) {
+    setError(null);
+    setSelectedSlot(slot);
+    setStep("confirm");
   }
 
-  async function handlePickSlot(slot: AvailableSlotDto) {
+  async function submit() {
+    if (!selectedSlot) return;
     setSubmitting(true);
-    setSubmitError(null);
+    setError(null);
+    const endpoint = isBooking ? `/api/patient/session/${token}/book` : `/api/patient/session/${token}/reschedule`;
     try {
-      const endpoint = session.purpose === "invite_to_book" 
-        ? `/api/patient/session/${token}/book`
-        : `/api/patient/session/${token}/reschedule`;
-      
-      if (slot.kind === "session") {
-        await apiClient.post(endpoint, {
-          date: slot.date,
-          sessionOfDay: slot.sessionOfDay,
-        });
-        const slotDate = new Date(slot.date + "T12:00:00");
-        onRescheduled(slotDate.toISOString());
+      if (selectedSlot.kind === "session") {
+        await apiClient.post(endpoint, { date: selectedSlot.date, sessionOfDay: selectedSlot.sessionOfDay });
+        onRescheduled(new Date(`${selectedSlot.date}T12:00:00`).toISOString(), selectedSlot);
       } else {
-        await apiClient.post(endpoint, {
-          startsAt: slot.startsAt,
-          endsAt: slot.endsAt,
-        });
-        onRescheduled(slot.startsAt);
+        await apiClient.post(endpoint, { startsAt: selectedSlot.startsAt, endsAt: selectedSlot.endsAt });
+        onRescheduled(selectedSlot.startsAt, selectedSlot);
       }
     } catch (err) {
-      if (err instanceof ApiError) {
-        if (err.code === "already_booked") {
-          setSubmitError("You already have an upcoming appointment. Please contact the clinic to change it.");
-        } else if (err.status === 409) {
-          setSubmitError("That time was just taken. Please pick another.");
-        } else if (err.status === 410) {
-          setSubmitError("This link has expired or was already used.");
-        } else if (err.status === 400) {
-          setSubmitError("Unable to reschedule. Please contact the clinic.");
-        } else {
-          setSubmitError(`Something went wrong (${err.status}). Please try again or contact the clinic.`);
-        }
+      if (err instanceof ApiError && err.code === "already_booked") {
+        setError("You already have an upcoming appointment. Please contact the clinic to change it.");
+      } else if (err instanceof ApiError && err.status === 409) {
+        // Taken while the patient was confirming — send them back to a fresh list.
+        setError("Sorry, that schedule was just filled. Please choose another.");
+        setSlots(null);
+        setStep("pick");
+      } else if (err instanceof ApiError && err.code === "clinic_closed") {
+        setError(err.message);
+        setSlots(null);
+        setStep("pick");
+      } else if (err instanceof ApiError && err.status === 410) {
+        setError("This link has expired or was already used.");
       } else {
-        setSubmitError("Something went wrong. Please try again.");
+        setError("Something went wrong. Please try again or contact the clinic.");
       }
     } finally {
       setSubmitting(false);
     }
   }
 
-  function slotKey(slot: AvailableSlotDto): string {
-    return slot.kind === "session" ? `${slot.date}-${slot.sessionOfDay}` : slot.startsAt;
-  }
-
-  function slotLabel(slot: AvailableSlotDto): string {
-    if (slot.kind === "session") {
-      const label = slot.sessionOfDay === "am" ? "Morning" : "Afternoon";
-      return `${label} (${slot.remaining} left)`;
+  async function cancelAppointment() {
+    if (!confirm("Cancel this appointment?")) return;
+    setSubmitting(true);
+    try {
+      await apiClient.post(`/api/patient/session/${token}/cancel`);
+      onRescheduled("");
+    } catch {
+      setError("Failed to cancel. Please contact the clinic.");
+    } finally {
+      setSubmitting(false);
     }
-    return formatInClinicTz(slot.startsAt, clinic.timezone);
-  }
-
-  function getSlotDate(slot: AvailableSlotDto): string {
-    if (slot.kind === "session") {
-      return slot.date;
-    }
-    return new Date(slot.startsAt).toISOString().split("T")[0];
-  }
-
-  function groupSlotsByDate(slots: AvailableSlotDto[]): Map<string, AvailableSlotDto[]> {
-    const grouped = new Map<string, AvailableSlotDto[]>();
-    for (const slot of slots) {
-      const date = getSlotDate(slot);
-      if (!grouped.has(date)) {
-        grouped.set(date, []);
-      }
-      grouped.get(date)!.push(slot);
-    }
-    return grouped;
-  }
-
-  function formatDateHeader(dateStr: string): string {
-    const date = new Date(dateStr + "T12:00:00");
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    if (
-      date.getFullYear() === today.getFullYear() &&
-      date.getMonth() === today.getMonth() &&
-      date.getDate() === today.getDate()
-    ) {
-      return "Today";
-    }
-
-    if (
-      date.getFullYear() === tomorrow.getFullYear() &&
-      date.getMonth() === tomorrow.getMonth() &&
-      date.getDate() === tomorrow.getDate()
-    ) {
-      return "Tomorrow";
-    }
-
-    return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   }
 
   const currentLabel = appointment
     ? appointment.isSessionCapacity && appointment.sessionOfDay
-      ? `${new Date(appointment.startsAt).toLocaleDateString()} · ${
-          appointment.sessionOfDay === "am" ? "Morning" : "Afternoon"
-        }`
-      : formatInClinicTz(appointment.startsAt, clinic.timezone)
+      ? `${formatYmd(ymdInTz(appointment.startsAt, timeZone), { weekday: "short", month: "short", day: "numeric" })} · ${sessionName(appointment.sessionOfDay)}`
+      : formatInClinicTz(appointment.startsAt, timeZone)
     : null;
 
-  const actionLabel = session.purpose === "invite_to_book" 
-    ? "Choose a time"
-    : session.purpose === "manage"
-    ? "Reschedule or cancel"
-    : "Choose a new time";
-
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">{clinic.name}</h1>
-        {currentLabel && <p className="mt-1 text-neutral-700">Current appointment: {currentLabel}</p>}
-        {appointment && <p className="text-sm text-neutral-500">Status: {appointment.status}</p>}
-        {session.purpose === "invite_to_book" && (
-          <p className="mt-1 text-neutral-700">Book your appointment</p>
+    <div className="flex flex-col gap-5">
+      <header className="border-b border-neutral-200 pb-4">
+        <p className="text-3xl font-bold tracking-tight text-brand-700">{clinic.name}</p>
+        {clinic.businessHours && (
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-neutral-600">
+            <Clock className="h-4 w-4 shrink-0 text-neutral-400" aria-hidden />
+            {formatBusinessHours(clinic.businessHours)}
+          </p>
         )}
-      </div>
+        <h1 className="mt-2 text-lg font-medium text-neutral-700">
+          {step === "confirm"
+            ? isBooking
+              ? "Confirm your booking"
+              : "Confirm new schedule"
+            : isBooking
+              ? "Book your appointment"
+              : "Your appointment"}
+        </h1>
+      </header>
 
-      {!showSlots ? (
-        <>
-          <PatientButton onClick={loadSlots}>{actionLabel}</PatientButton>
-          {session.purpose === "manage" && appointment && (
-            <PatientButton 
-              variant="secondary" 
-              onClick={async () => {
-                if (!confirm("Cancel this appointment?")) return;
-                setSubmitting(true);
-                try {
-                  await apiClient.post(`/api/patient/session/${token}/cancel`);
-                  onRescheduled("");
-                } catch (err) {
-                  if (err instanceof ApiError) {
-                    setSubmitError("Failed to cancel. Please contact the clinic.");
-                  }
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
-              disabled={submitting}
-            >
+      {error && (
+        <p role="alert" className="rounded-lg bg-status-cancelled-bg px-4 py-3 text-sm text-status-cancelled">
+          {error}
+        </p>
+      )}
+
+      {step === "overview" && appointment && (
+        <div className="flex flex-col gap-3">
+          <div className="rounded-xl border border-neutral-200 bg-white p-4">
+            <p className="text-sm text-neutral-500">Current schedule</p>
+            <p className="mt-1 text-lg font-medium text-neutral-900">{currentLabel}</p>
+            <p className="mt-1 text-sm capitalize text-neutral-500">{appointment.status.replace("_", " ")}</p>
+          </div>
+          <PatientButton onClick={() => setStep("pick")} disabled={submitting}>
+            Reschedule
+          </PatientButton>
+          {session.purpose === "manage" && (
+            <PatientButton variant="secondary" onClick={cancelAppointment} disabled={submitting}>
               Cancel appointment
             </PatientButton>
           )}
-        </>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {submitError && <p className="text-status-cancelled">{submitError}</p>}
-          {slots.length === 0 ? (
-            <p className="text-neutral-500">Loading available times…</p>
+        </div>
+      )}
+
+      {step === "pick" && (
+        <div className="flex flex-col gap-5">
+          {slots === null ? (
+            <PickerSkeleton />
+          ) : dates.length === 0 ? (
+            <p className="rounded-xl border border-neutral-200 bg-white p-4 text-neutral-600">
+              No schedules are available in the next two weeks. Please contact the clinic.
+            </p>
           ) : (
-            <div className="flex flex-col gap-4">
-              {Array.from(groupSlotsByDate(slots)).map(([date, dateSlots]) => (
-                <div key={date} className="flex flex-col gap-2">
-                  <h3 className="text-sm font-semibold text-neutral-700">{formatDateHeader(date)}</h3>
-                  <ul className="flex flex-col gap-2">
-                    {dateSlots.map((slot) => (
-                      <li key={slotKey(slot)}>
-                        <PatientButton
-                          variant="secondary"
-                          onClick={() => handlePickSlot(slot)}
-                          disabled={submitting}
-                          className="w-full text-left"
-                        >
-                          {slotLabel(slot)}
-                        </PatientButton>
-                      </li>
-                    ))}
-                  </ul>
+            <>
+              <section className="flex flex-col gap-2">
+                <h2 className="text-sm font-semibold text-neutral-700">1. Select a date</h2>
+                <div className="-mx-4 flex snap-x scroll-px-4 gap-2 overflow-x-auto px-4 pb-1">
+                  {dates.map((ymd) => {
+                    const active = ymd === activeDate;
+                    return (
+                      <button
+                        key={ymd}
+                        type="button"
+                        aria-pressed={active}
+                        aria-label={formatYmd(ymd, { weekday: "long", month: "long", day: "numeric" })}
+                        onClick={() => setSelectedDate(ymd)}
+                        className={`flex min-w-[4.5rem] shrink-0 snap-start flex-col items-center rounded-xl border px-3 py-2 ${
+                          active
+                            ? "border-brand-700 bg-brand-700 text-white"
+                            : "border-neutral-200 bg-white text-neutral-900 active:bg-neutral-100"
+                        }`}
+                      >
+                        <span className={`text-xs ${active ? "text-white/80" : "text-neutral-500"}`}>
+                          {formatYmd(ymd, { weekday: "short" })}
+                        </span>
+                        <span className="text-xl font-semibold leading-tight">{formatYmd(ymd, { day: "numeric" })}</span>
+                        <span className={`text-xs ${active ? "text-white/80" : "text-neutral-500"}`}>
+                          {formatYmd(ymd, { month: "short" })}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
+              </section>
+
+              {activeDate && (
+                <section className="flex flex-col gap-2">
+                  <h2 className="text-sm font-semibold text-neutral-700">
+                    2. Choose a time ·{" "}
+                    <span className="font-normal text-neutral-500">
+                      {formatYmd(activeDate, { weekday: "long", month: "long", day: "numeric" })}
+                    </span>
+                  </h2>
+                  {daySlots[0]?.kind === "session" ? (
+                    <>
+                      <SessionOptions
+                        slots={daySlots as SessionAvailableSlotDto[]}
+                        hours={clinic.sessionHours}
+                        onChoose={chooseSlot}
+                      />
+                      {clinic.sessionHours && <CutoffNote />}
+                    </>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {daySlots.map((slot) => (
+                        <button
+                          key={slotKey(slot)}
+                          type="button"
+                          onClick={() => chooseSlot(slot)}
+                          className="rounded-xl border border-neutral-200 bg-white px-2 py-3 text-center font-medium text-neutral-900 active:bg-neutral-100"
+                        >
+                          {slot.kind === "timed" ? formatTime(slot.startsAt, timeZone) : null}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+            </>
+          )}
+
+          {!isBooking && (
+            <PatientButton variant="secondary" onClick={() => setStep("overview")}>
+              Back
+            </PatientButton>
           )}
         </div>
       )}
+
+      {step === "confirm" && selectedSlot && (
+        <div className="flex flex-col gap-3">
+          <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
+            <p className="text-sm text-neutral-600">
+              {isBooking ? "You're booking an appointment on" : "Your appointment will be moved to"}
+            </p>
+            <SelectedSlotDetails {...describeSlot(selectedSlot, timeZone, clinic.sessionHours)} />
+            {currentLabel && <p className="mt-3 text-sm text-neutral-500">Current schedule: {currentLabel}</p>}
+          </div>
+          {selectedSlot.kind === "session" && clinic.sessionHours && <CutoffNote />}
+          <PatientButton onClick={submit} disabled={submitting}>
+            {submitting ? "Please wait…" : isBooking ? "Confirm booking" : "Confirm new schedule"}
+          </PatientButton>
+          <PatientButton variant="secondary" onClick={() => setStep("pick")} disabled={submitting}>
+            Change
+          </PatientButton>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SessionOptions({
+  slots,
+  hours,
+  onChoose,
+}: {
+  slots: SessionAvailableSlotDto[];
+  hours: SupportedSession["clinic"]["sessionHours"];
+  onChoose: (slot: AvailableSlotDto) => void;
+}) {
+  // Always show both sessions so a full one reads as "unavailable" rather than silently missing.
+  return (
+    <div className="flex flex-col gap-2">
+      {(["am", "pm"] as SessionOfDay[]).map((sessionOfDay) => {
+        const slot = slots.find((s) => s.sessionOfDay === sessionOfDay);
+        const range = sessionHoursLabel(sessionOfDay, hours);
+        return (
+          <button
+            key={sessionOfDay}
+            type="button"
+            disabled={!slot}
+            onClick={() => slot && onChoose(slot)}
+            className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-4 py-4 text-left active:bg-neutral-100 disabled:bg-neutral-50 disabled:opacity-60"
+          >
+            <span>
+              <span className="block text-lg font-medium text-neutral-900">{sessionName(sessionOfDay)}</span>
+              {range && <span className="block text-sm text-neutral-500">{range}</span>}
+            </span>
+            <span className="text-sm text-neutral-500">
+              {slot ? `${slot.remaining} ${slot.remaining === 1 ? "spot" : "spots"} left` : "Unavailable"}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SelectedSlotDetails({ date, time, detail }: ReturnType<typeof describeSlot>) {
+  return (
+    <>
+      <p className="mt-2 text-lg font-semibold text-neutral-900">{date}</p>
+      <p className="font-medium text-neutral-800">{time}</p>
+      {detail && <p className="text-sm text-neutral-600">{detail}</p>}
+    </>
+  );
+}
+
+function CutoffNote() {
+  return (
+    <p className="text-sm text-neutral-600">
+      Please arrive before the <span className="font-medium">cut-off time</span>.
+    </p>
+  );
+}
+
+function PickerSkeleton() {
+  return (
+    <div className="flex animate-pulse flex-col gap-3" aria-label="Loading available dates">
+      <div className="flex gap-2">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-[4.5rem] w-[4.5rem] rounded-xl bg-neutral-200" />
+        ))}
+      </div>
+      <div className="h-16 rounded-xl bg-neutral-200" />
+      <div className="h-16 rounded-xl bg-neutral-200" />
     </div>
   );
 }

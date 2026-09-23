@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@confirmly/db";
 import { requireAuth } from "../auth/guard";
-import { patientsService, PatientPhoneTakenError } from "../services/patients";
+import { activeInviteWhere, patientsService, PatientPhoneTakenError } from "../services/patients";
 import { createAccessToken } from "../services/tokens";
 import { findUpcomingAppointment, PatientAlreadyBookedError } from "../services/patient-schedule";
 import { renderInviteToBookSms } from "../templates/sms";
@@ -119,6 +119,15 @@ export function registerPatientRoutes(app: FastifyInstance, smsService: SmsServi
     }
     if (await findUpcomingAppointment(prisma, clinicId, patient.id)) {
       throw new PatientAlreadyBookedError();
+    }
+    const pendingInvite = await prisma.accessToken.findFirst({
+      where: { patientId: patient.id, clinicId, ...activeInviteWhere() },
+    });
+    if (pendingInvite) {
+      return reply.code(409).send({
+        error: "invite_already_sent",
+        message: "A booking link was already sent and is still valid",
+      });
     }
 
     const clinic = await prisma.clinic.findUniqueOrThrow({ where: { id: clinicId } });

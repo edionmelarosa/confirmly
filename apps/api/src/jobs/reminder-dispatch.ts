@@ -15,7 +15,7 @@ export async function dispatchDueReminders(smsService: SmsService, env: Env) {
     where: {
       startsAt: { gte: now, lte: widestWindowEnd },
       reminderSentAt: null,
-      status: { not: "cancelled" },
+      status: { in: ["scheduled", "confirmed"] },
     },
     include: { clinic: true, patient: true },
   });

@@ -1,16 +1,26 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@confirmly/db";
-import type { AvailableSlotDto, PatientSessionResponse, WaitlistClaimResponse } from "@confirmly/shared-types";
+import type {
+  AvailableSlotDto,
+  BusinessHoursDto,
+  PatientSessionResponse,
+  SessionHoursDto,
+  WaitlistClaimResponse,
+} from "@confirmly/shared-types";
 import type { SmsService } from "../services/sms";
 import { resolveAccessToken, markAccessTokenUsed } from "../services/tokens";
 import { appointmentsService, DoubleBookingError } from "../services/appointments";
 import { sessionsService, SessionFullError } from "../services/sessions";
 import { findUpcomingAppointment, PatientAlreadyBookedError } from "../services/patient-schedule";
+import {
+  businessWindow,
+  isOpenOnDate,
+  isWithinBusinessHours,
+  type BusinessHours,
+} from "../services/business-hours";
 
 const SLOT_MINUTES = 30;
-const DAY_START_HOUR = 8;
-const DAY_END_HOUR = 18;
 const SLOT_SEARCH_DAYS = 14;
 
 const rescheduleSchema = z.object({
@@ -19,6 +29,37 @@ const rescheduleSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   sessionOfDay: z.enum(["am", "pm"]).optional(),
 });
+
+function sessionHoursOf(clinic: {
+  sessionAmStartHour: number;
+  sessionAmEndHour: number;
+  sessionPmStartHour: number;
+  sessionPmEndHour: number;
+}): SessionHoursDto {
+  return {
+    am: { startHour: clinic.sessionAmStartHour, endHour: clinic.sessionAmEndHour },
+    pm: { startHour: clinic.sessionPmStartHour, endHour: clinic.sessionPmEndHour },
+  };
+}
+
+function businessHoursOf(clinic: BusinessHours): BusinessHoursDto {
+  return { openDays: clinic.openDays, openHour: clinic.openHour, closeHour: clinic.closeHour };
+}
+
+/** Patients may only pick schedules inside business days/hours (staff can still book anything). */
+function isRequestInBusinessHours(
+  clinic: BusinessHours,
+  body: { date?: string; startsAt?: Date; endsAt?: Date },
+): boolean {
+  if (body.date) return isOpenOnDate(clinic, body.date);
+  if (body.startsAt && body.endsAt) return isWithinBusinessHours(clinic, body.startsAt, body.endsAt);
+  return true;
+}
+
+const CLINIC_CLOSED_REPLY = {
+  error: "clinic_closed",
+  message: "The clinic is closed at that time. Please choose another schedule.",
+};
 
 async function buildAvailableSlots(clinicId: string, resourceId: string | null): Promise<AvailableSlotDto[]> {
   const clinic = await prisma.clinic.findUniqueOrThrow({ where: { id: clinicId } });
@@ -29,13 +70,15 @@ async function buildAvailableSlots(clinicId: string, resourceId: string | null):
     for (let day = 0; day < SLOT_SEARCH_DAYS; day++) {
       const d = new Date(now.getTime() + day * 24 * 60 * 60 * 1000);
       const dateYmd = sessionsService.dateYmdInTimeZone(d, clinic.timezone);
+      if (!isOpenOnDate(clinic, dateYmd)) continue;
       for (const sessionOfDay of ["am", "pm"] as const) {
-        const { remaining, capacity } = await sessionsService.remainingSessionCapacity(
+        const { remaining, capacity, endsAt } = await sessionsService.remainingSessionCapacity(
           clinicId,
           dateYmd,
           sessionOfDay,
         );
-        if (remaining > 0) {
+        // Don't offer a session that is already over (e.g. this morning, viewed in the afternoon).
+        if (remaining > 0 && endsAt.getTime() > now.getTime()) {
           slots.push({ kind: "session", date: dateYmd, sessionOfDay, remaining, capacity });
         }
       }
@@ -56,21 +99,22 @@ async function buildAvailableSlots(clinicId: string, resourceId: string | null):
   const taken = new Set(existing.map((a) => a.startsAt.getTime()));
 
   const slots: AvailableSlotDto[] = [];
-  const cursor = new Date(now);
-  cursor.setMinutes(0, 0, 0);
 
   for (let day = 0; day < SLOT_SEARCH_DAYS; day++) {
-    const dayStart = new Date(cursor.getTime() + day * 24 * 60 * 60 * 1000);
-    dayStart.setHours(DAY_START_HOUR, 0, 0, 0);
+    const dateYmd = sessionsService.dateYmdInTimeZone(
+      new Date(now.getTime() + day * 24 * 60 * 60 * 1000),
+      clinic.timezone,
+    );
+    if (!isOpenOnDate(clinic, dateYmd)) continue;
 
-    const slotCount = ((DAY_END_HOUR - DAY_START_HOUR) * 60) / SLOT_MINUTES;
-    for (let i = 0; i < slotCount; i++) {
-      const startsAt = new Date(dayStart.getTime() + i * SLOT_MINUTES * 60_000);
-      if (startsAt.getTime() < now.getTime()) continue;
-      if (taken.has(startsAt.getTime())) continue;
-
+    // Slots run from opening time up to the last one that ends by closing time (clinic wall clock).
+    const { opensAt, closesAt } = businessWindow(clinic, dateYmd);
+    for (let startsAt = opensAt; startsAt.getTime() + SLOT_MINUTES * 60_000 <= closesAt.getTime(); ) {
       const endsAt = new Date(startsAt.getTime() + SLOT_MINUTES * 60_000);
-      slots.push({ kind: "timed", startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() });
+      if (startsAt.getTime() >= now.getTime() && !taken.has(startsAt.getTime())) {
+        slots.push({ kind: "timed", startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() });
+      }
+      startsAt = endsAt;
     }
   }
 
@@ -134,6 +178,8 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
           name: patient.clinic.name,
           timezone: patient.clinic.timezone,
           schedulingMode: patient.clinic.schedulingMode,
+          sessionHours: sessionHoursOf(patient.clinic),
+          businessHours: businessHoursOf(patient.clinic),
         },
         patientId: patient.id,
         patientName: patient.name,
@@ -169,6 +215,8 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
         name: appointment.clinic.name,
         timezone: appointment.clinic.timezone,
         schedulingMode: appointment.clinic.schedulingMode,
+        sessionHours: sessionHoursOf(appointment.clinic),
+        businessHours: businessHoursOf(appointment.clinic),
       },
     };
 
@@ -226,6 +274,9 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
     });
     if (!appointment) {
       return reply.code(410).send({ error: "gone", message: "Appointment no longer exists" });
+    }
+    if (!isRequestInBusinessHours(appointment.clinic, body.data)) {
+      return reply.code(400).send(CLINIC_CLOSED_REPLY);
     }
 
     try {
@@ -351,6 +402,9 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
     });
     if (!patient || patient.clinicId !== record.clinicId) {
       return reply.code(410).send({ error: "gone", message: "Patient not found" });
+    }
+    if (!isRequestInBusinessHours(patient.clinic, body.data)) {
+      return reply.code(400).send(CLINIC_CLOSED_REPLY);
     }
 
     try {

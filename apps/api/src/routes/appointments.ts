@@ -180,6 +180,18 @@ export function registerAppointmentRoutes(
     if (!appointment) {
       return reply.code(404).send({ error: "not_found", message: "Appointment not found" });
     }
+    if (appointment.status !== "scheduled" && appointment.status !== "confirmed") {
+      return reply.code(409).send({
+        error: "invalid_status",
+        message: `Can't send a reminder for a ${appointment.status.replace("_", " ")} appointment`,
+      });
+    }
+    if (appointment.reminderSentAt) {
+      return reply.code(409).send({
+        error: "reminder_already_sent",
+        message: "A reminder was already sent for this appointment",
+      });
+    }
 
     const [clinic, patient] = await Promise.all([
       prisma.clinic.findUniqueOrThrow({ where: { id: clinicId } }),
@@ -212,6 +224,11 @@ export function registerAppointmentRoutes(
       body,
       appointmentId: appointment.id,
     });
+
+    if (result.success) {
+      // Same marker the cron uses, so the scheduled job won't send a second reminder either.
+      await prisma.appointment.update({ where: { id: appointment.id }, data: { reminderSentAt: new Date() } });
+    }
 
     return reply.send({ sent: result.success, providerStatus: result.providerStatus });
   });
