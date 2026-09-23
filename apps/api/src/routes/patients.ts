@@ -87,7 +87,8 @@ export function registerPatientRoutes(app: FastifyInstance, smsService: SmsServi
 
     const { token } = await createAccessToken({
       purpose: "invite_to_book",
-      appointmentId: patient.id,
+      patientId: patient.id,
+      clinicId,
     });
 
     const bookingLink = `${env.WEB_ORIGIN}/c/${token}`;

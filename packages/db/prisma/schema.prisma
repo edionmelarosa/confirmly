@@ -52,6 +52,7 @@ model Clinic {
   waitlistEntries  WaitlistEntry[]
   smsLogs          SmsLog[]
   recurrenceRules  RecurrenceRule[]
+  accessTokens     AccessToken[]
 
   @@map("clinics")
 }
@@ -98,6 +99,7 @@ model Patient {
   appointments    Appointment[]
   waitlistEntries WaitlistEntry[]
   recurrenceRules RecurrenceRule[]
+  accessTokens    AccessToken[]
 
   @@unique([clinicId, phone])
   @@map("patients")
@@ -205,12 +207,16 @@ model AccessToken {
   purpose         AccessTokenPurpose
   appointmentId   String?            @map("appointment_id")
   waitlistEntryId String?            @map("waitlist_entry_id")
+  patientId       String?            @map("patient_id")
+  clinicId        String?            @map("clinic_id")
   expiresAt       DateTime           @map("expires_at")
   usedAt          DateTime?          @map("used_at")
   createdAt       DateTime           @default(now()) @map("created_at")
 
   appointment   Appointment?   @relation(fields: [appointmentId], references: [id])
   waitlistEntry WaitlistEntry? @relation(fields: [waitlistEntryId], references: [id])
+  patient       Patient?       @relation(fields: [patientId], references: [id])
+  clinic        Clinic?        @relation(fields: [clinicId], references: [id])
 
   @@map("access_tokens")
 }
