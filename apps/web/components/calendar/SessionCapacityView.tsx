@@ -110,6 +110,15 @@ export function SessionCapacityView() {
     }
   }
 
+  async function resendReminder(id: string) {
+    try {
+      await apiClient.post(`/appointments/${id}/resend-reminder`);
+      toast.success("Reminder resent.");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Something went wrong");
+    }
+  }
+
   if (!appointments || !settings) {
     return (
       <div className="space-y-2">
@@ -187,6 +196,9 @@ export function SessionCapacityView() {
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge status={a.status}>{a.status.replace("_", " ")}</Badge>
+                          <Button type="button" size="sm" variant="secondary" onClick={() => resendReminder(a.id)}>
+                            Send reminder
+                          </Button>
                           <Button type="button" size="sm" variant="secondary" onClick={() => markStatus(a.id, "completed")}>
                             Complete
                           </Button>
