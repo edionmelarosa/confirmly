@@ -21,11 +21,12 @@ type ViewState =
   | { status: "claimed" };
 
 function SlotSummary({ slot, clinic }: { slot: AvailableSlotDto; clinic: PatientSessionClinicDto }) {
-  const { date, time } = describeSlot(slot, clinic.timezone, clinic.sessionHours);
+  const { date, time, detail } = describeSlot(slot, clinic.timezone, clinic.sessionHours);
   return (
     <div className="w-full rounded-xl border border-neutral-200 bg-white p-4">
       <p className="text-lg font-semibold text-neutral-900">{date}</p>
-      <p className="text-neutral-700">{time}</p>
+      <p className="font-medium text-neutral-800">{time}</p>
+      {detail && <p className="text-sm text-neutral-600">{detail}</p>}
     </div>
   );
 }
@@ -70,7 +71,9 @@ export function PatientSessionView({ token }: PatientSessionViewProps) {
         </div>
         <SlotSummary slot={state.slot} clinic={state.clinic} />
         <p className="text-sm text-neutral-600">
-          Please arrive a few minutes early. If you need to change your appointment, please contact the clinic.
+          {state.slot.kind === "session"
+            ? "Please arrive before the cut-off time. If you need to change your appointment, please contact the clinic."
+            : "Please arrive a few minutes early. If you need to change your appointment, please contact the clinic."}
         </p>
       </div>
     );

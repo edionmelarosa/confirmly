@@ -13,6 +13,10 @@ export interface ClinicSettingsDto {
   sessionAmEndHour: number;
   sessionPmStartHour: number;
   sessionPmEndHour: number;
+  /** JS weekday numbers, 0 = Sunday … 6 = Saturday. */
+  openDays: number[];
+  openHour: number;
+  closeHour: number;
 }
 
 export interface UpdateClinicSettingsInput {
@@ -25,4 +29,7 @@ export interface UpdateClinicSettingsInput {
   sessionAmEndHour?: number;
   sessionPmStartHour?: number;
   sessionPmEndHour?: number;
+  openDays?: number[];
+  openHour?: number;
+  closeHour?: number;
 }

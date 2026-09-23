@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Clock } from "lucide-react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type {
   AvailableSlotDto,
@@ -12,6 +13,7 @@ import type {
 } from "@confirmly/shared-types";
 import {
   describeSlot,
+  formatBusinessHours,
   formatInClinicTz,
   formatTime,
   formatYmd,
@@ -107,6 +109,10 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
         setError("Sorry, that schedule was just filled. Please choose another.");
         setSlots(null);
         setStep("pick");
+      } else if (err instanceof ApiError && err.code === "clinic_closed") {
+        setError(err.message);
+        setSlots(null);
+        setStep("pick");
       } else if (err instanceof ApiError && err.status === 410) {
         setError("This link has expired or was already used.");
       } else {
@@ -140,6 +146,12 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
     <div className="flex flex-col gap-5">
       <header className="border-b border-neutral-200 pb-4">
         <p className="text-3xl font-bold tracking-tight text-brand-700">{clinic.name}</p>
+        {clinic.businessHours && (
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-neutral-600">
+            <Clock className="h-4 w-4 shrink-0 text-neutral-400" aria-hidden />
+            {formatBusinessHours(clinic.businessHours)}
+          </p>
+        )}
         <h1 className="mt-2 text-lg font-medium text-neutral-700">
           {step === "confirm"
             ? isBooking
@@ -225,11 +237,14 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
                     </span>
                   </h2>
                   {daySlots[0]?.kind === "session" ? (
-                    <SessionOptions
-                      slots={daySlots as SessionAvailableSlotDto[]}
-                      hours={clinic.sessionHours}
-                      onChoose={chooseSlot}
-                    />
+                    <>
+                      <SessionOptions
+                        slots={daySlots as SessionAvailableSlotDto[]}
+                        hours={clinic.sessionHours}
+                        onChoose={chooseSlot}
+                      />
+                      {clinic.sessionHours && <CutoffNote />}
+                    </>
                   ) : (
                     <div className="grid grid-cols-3 gap-2">
                       {daySlots.map((slot) => (
@@ -263,12 +278,10 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
             <p className="text-sm text-neutral-600">
               {isBooking ? "You're booking an appointment on" : "Your appointment will be moved to"}
             </p>
-            <p className="mt-2 text-lg font-semibold text-neutral-900">
-              {describeSlot(selectedSlot, timeZone, clinic.sessionHours).date}
-            </p>
-            <p className="text-neutral-800">{describeSlot(selectedSlot, timeZone, clinic.sessionHours).time}</p>
+            <SelectedSlotDetails {...describeSlot(selectedSlot, timeZone, clinic.sessionHours)} />
             {currentLabel && <p className="mt-3 text-sm text-neutral-500">Current schedule: {currentLabel}</p>}
           </div>
+          {selectedSlot.kind === "session" && clinic.sessionHours && <CutoffNote />}
           <PatientButton onClick={submit} disabled={submitting}>
             {submitting ? "Please wait…" : isBooking ? "Confirm booking" : "Confirm new schedule"}
           </PatientButton>
@@ -315,6 +328,24 @@ function SessionOptions({
         );
       })}
     </div>
+  );
+}
+
+function SelectedSlotDetails({ date, time, detail }: ReturnType<typeof describeSlot>) {
+  return (
+    <>
+      <p className="mt-2 text-lg font-semibold text-neutral-900">{date}</p>
+      <p className="font-medium text-neutral-800">{time}</p>
+      {detail && <p className="text-sm text-neutral-600">{detail}</p>}
+    </>
+  );
+}
+
+function CutoffNote() {
+  return (
+    <p className="text-sm text-neutral-600">
+      Please arrive before the <span className="font-medium">cut-off time</span>.
+    </p>
   );
 }
 
