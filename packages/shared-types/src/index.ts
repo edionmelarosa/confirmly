@@ -8,3 +8,4 @@ export * from "./patient-session";
 export * from "./waitlist";
 export * from "./recurrence";
 export * from "./clinic";
+export * from "./sms-log";
