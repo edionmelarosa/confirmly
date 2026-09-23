@@ -112,16 +112,15 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
     }
 
     if (record.purpose === "invite_to_book") {
-      const patientId = record.appointmentId;
-      if (!patientId) {
+      if (!record.patientId || !record.clinicId) {
         return reply.code(410).send({ error: "gone", message: "This link is no longer valid" });
       }
 
       const patient = await prisma.patient.findUnique({
-        where: { id: patientId },
+        where: { id: record.patientId },
         include: { clinic: true },
       });
-      if (!patient) {
+      if (!patient || patient.clinicId !== record.clinicId) {
         return reply.code(410).send({ error: "gone", message: "Patient not found" });
       }
 
@@ -174,16 +173,34 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
 
   app.get<{ Params: { token: string } }>("/api/patient/session/:token/slots", async (request, reply) => {
     const resolved = await resolveAccessToken(request.params.token);
-    if (resolved.state !== "valid" || !resolved.record?.appointmentId) {
+    if (resolved.state !== "valid") {
       return reply.code(410).send({ error: "gone", message: "This link has expired or was already used" });
     }
 
-    const appointment = await prisma.appointment.findUnique({ where: { id: resolved.record.appointmentId } });
-    if (!appointment) {
-      return reply.code(410).send({ error: "gone", message: "Appointment no longer exists" });
+    const record = resolved.record!;
+    let clinicId: string;
+    let resourceId: string | null = null;
+
+    if (record.purpose === "invite_to_book") {
+      if (!record.clinicId) {
+        return reply.code(410).send({ error: "gone", message: "This link is no longer valid" });
+      }
+      clinicId = record.clinicId;
+      // For invite_to_book, resourceId stays null - patient can pick from any resource
+    } else {
+      // For reschedule/manage, need appointmentId
+      if (!record.appointmentId) {
+        return reply.code(410).send({ error: "gone", message: "This link is no longer valid" });
+      }
+      const appointment = await prisma.appointment.findUnique({ where: { id: record.appointmentId } });
+      if (!appointment) {
+        return reply.code(410).send({ error: "gone", message: "Appointment no longer exists" });
+      }
+      clinicId = appointment.clinicId;
+      resourceId = appointment.resourceId;
     }
 
-    const slots = await buildAvailableSlots(appointment.clinicId, appointment.resourceId);
+    const slots = await buildAvailableSlots(clinicId, resourceId);
     return reply.send({ slots });
   });
 
@@ -316,20 +333,19 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
 
     const resolved = await resolveAccessToken(request.params.token);
     if (resolved.state !== "valid" || resolved.record?.purpose !== "invite_to_book") {
-      return reply.code(410).send({ error: "gone", message: "This link has expired or was already used" });
+      return reply.code(410).send({ error: "gone", message: "This link has expires or was already used" });
     }
 
     const record = resolved.record;
-    const patientId = record.appointmentId;
-    if (!patientId) {
+    if (!record.patientId || !record.clinicId) {
       return reply.code(410).send({ error: "gone", message: "This link is no longer valid" });
     }
 
     const patient = await prisma.patient.findUnique({
-      where: { id: patientId },
+      where: { id: record.patientId },
       include: { clinic: true },
     });
-    if (!patient) {
+    if (!patient || patient.clinicId !== record.clinicId) {
       return reply.code(410).send({ error: "gone", message: "Patient not found" });
     }
 

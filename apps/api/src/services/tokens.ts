@@ -17,6 +17,8 @@ export interface CreateAccessTokenParams {
   purpose: AccessTokenPurpose;
   appointmentId?: string | null;
   waitlistEntryId?: string | null;
+  patientId?: string | null;
+  clinicId?: string | null;
 }
 
 export interface IssuedAccessToken {
@@ -42,6 +44,8 @@ export async function createAccessToken(params: CreateAccessTokenParams): Promis
       purpose: params.purpose,
       appointmentId: params.appointmentId ?? null,
       waitlistEntryId: params.waitlistEntryId ?? null,
+      patientId: params.patientId ?? null,
+      clinicId: params.clinicId ?? null,
       expiresAt: new Date(Date.now() + ttlMs),
     },
   });

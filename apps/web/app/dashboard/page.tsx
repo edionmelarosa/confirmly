@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarCheck, UserX, AlarmClock } from "lucide-react";
+import { CalendarCheck } from "lucide-react";
 import type { AppointmentDto } from "@confirmly/shared-types";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { StatCard } from "@/components/dashboard/StatCard";
@@ -33,12 +33,6 @@ function isSameDay(a: Date, b: Date): boolean {
   );
 }
 
-function startOfWeek(date: Date): Date {
-  const result = new Date(date);
-  result.setHours(0, 0, 0, 0);
-  result.setDate(result.getDate() - result.getDay());
-  return result;
-}
 
 export default function DashboardPage() {
   const toast = useToast();
@@ -75,10 +69,8 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full" />
-          ))}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Skeleton className="h-20 w-full" />
         </div>
         <Skeleton className="h-64 w-full" />
       </div>
@@ -92,40 +84,13 @@ export default function DashboardPage() {
     .filter((appt) => appt.status !== "cancelled" && isSameDay(new Date(appt.startsAt), now))
     .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
 
-  const weekStart = startOfWeek(now);
-  const noShowsThisWeek = appointments.filter(
-    (appt) => appt.status === "no_show" && new Date(appt.startsAt) >= weekStart,
-  ).length;
-
-  const next24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  const unconfirmedNext24h = appointments.filter(
-    (appt) =>
-      appt.status === "scheduled" &&
-      new Date(appt.startsAt) >= now &&
-      new Date(appt.startsAt) <= next24h,
-  ).length;
-
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StatCard
           label="Today's appointments"
           value={todaysAppointments.length}
           icon={CalendarCheck}
-          href="/dashboard/appointments"
-        />
-        <StatCard
-          label="No-shows this week"
-          value={noShowsThisWeek}
-          icon={UserX}
-          tone="danger"
-          href="/dashboard/appointments"
-        />
-        <StatCard
-          label="Unconfirmed (next 24h)"
-          value={unconfirmedNext24h}
-          icon={AlarmClock}
-          tone="warning"
           href="/dashboard/appointments"
         />
       </div>

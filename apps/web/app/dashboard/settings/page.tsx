@@ -16,10 +16,8 @@ export default function SettingsPage() {
   const [schedulingMode, setSchedulingMode] = useState<SchedulingMode>("fixed_time");
   const [sessionCapacityAm, setSessionCapacityAm] = useState("15");
   const [sessionCapacityPm, setSessionCapacityPm] = useState("10");
-  const [sessionAmStartHour, setSessionAmStartHour] = useState("8");
-  const [sessionAmEndHour, setSessionAmEndHour] = useState("12");
-  const [sessionPmStartHour, setSessionPmStartHour] = useState("13");
-  const [sessionPmEndHour, setSessionPmEndHour] = useState("18");
+  const [morningCutoffHour, setMorningCutoffHour] = useState("12");
+  const [afternoonCutoffHour, setAfternoonCutoffHour] = useState("18");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -31,10 +29,8 @@ export default function SettingsPage() {
         setSchedulingMode(data.schedulingMode);
         setSessionCapacityAm(String(data.sessionCapacityAm ?? 15));
         setSessionCapacityPm(String(data.sessionCapacityPm ?? 10));
-        setSessionAmStartHour(String(data.sessionAmStartHour));
-        setSessionAmEndHour(String(data.sessionAmEndHour));
-        setSessionPmStartHour(String(data.sessionPmStartHour));
-        setSessionPmEndHour(String(data.sessionPmEndHour));
+        setMorningCutoffHour(String(data.sessionAmEndHour));
+        setAfternoonCutoffHour(String(data.sessionPmEndHour));
       })
       .catch((err) => {
         toast.error(err instanceof ApiError ? err.message : "Failed to load settings");
@@ -49,14 +45,12 @@ export default function SettingsPage() {
       const payload: Record<string, unknown> = {
         reminderLeadDays: Number(reminderLeadDays),
         schedulingMode,
+        sessionAmEndHour: Number(morningCutoffHour),
+        sessionPmEndHour: Number(afternoonCutoffHour),
       };
       if (schedulingMode === "session_capacity") {
         payload.sessionCapacityAm = Number(sessionCapacityAm);
         payload.sessionCapacityPm = Number(sessionCapacityPm);
-        payload.sessionAmStartHour = Number(sessionAmStartHour);
-        payload.sessionAmEndHour = Number(sessionAmEndHour);
-        payload.sessionPmStartHour = Number(sessionPmStartHour);
-        payload.sessionPmEndHour = Number(sessionPmEndHour);
       }
       const updated = await apiClient.patch<ClinicSettingsDto>("/clinic-settings", payload);
       setSettings(updated);
@@ -143,54 +137,30 @@ export default function SettingsPage() {
                     required
                   />
                 </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
-                    Morning start hour
-                    <Input
-                      type="number"
-                      min={0}
-                      max={23}
-                      value={sessionAmStartHour}
-                      onChange={(e) => setSessionAmStartHour(e.target.value)}
-                      required
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
-                    Morning end hour
-                    <Input
-                      type="number"
-                      min={1}
-                      max={24}
-                      value={sessionAmEndHour}
-                      onChange={(e) => setSessionAmEndHour(e.target.value)}
-                      required
-                    />
-                  </label>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
-                    Afternoon start hour
-                    <Input
-                      type="number"
-                      min={0}
-                      max={23}
-                      value={sessionPmStartHour}
-                      onChange={(e) => setSessionPmStartHour(e.target.value)}
-                      required
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
-                    Afternoon end hour
-                    <Input
-                      type="number"
-                      min={1}
-                      max={24}
-                      value={sessionPmEndHour}
-                      onChange={(e) => setSessionPmEndHour(e.target.value)}
-                      required
-                    />
-                  </label>
-                </div>
+                <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                  Morning cutoff time
+                  <Input
+                    type="time"
+                    value={`${morningCutoffHour.padStart(2, "0")}:00`}
+                    onChange={(e) => {
+                      const hour = e.target.value.split(":")[0];
+                      setMorningCutoffHour(hour);
+                    }}
+                    required
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                  Afternoon cutoff time
+                  <Input
+                    type="time"
+                    value={`${afternoonCutoffHour.padStart(2, "0")}:00`}
+                    onChange={(e) => {
+                      const hour = e.target.value.split(":")[0];
+                      setAfternoonCutoffHour(hour);
+                    }}
+                    required
+                  />
+                </label>
               </>
             )}
 

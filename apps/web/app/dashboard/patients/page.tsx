@@ -16,6 +16,10 @@ interface PatientRow {
   id: string;
   name: string;
   phone: string;
+  service: string | null;
+  scheduleType: string | null;
+  scheduleDetails: string | null;
+  nextSchedule: string | null;
   appointments: { startsAt: string }[];
   recurrenceRules: { status: string; ruleType: string }[];
 }
@@ -27,7 +31,8 @@ export default function PatientsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [scheduleType, setScheduleType] = useState("");
+  const [scheduleTypeOption, setScheduleTypeOption] = useState<"every_3_weeks" | "every_month" | "every_day_of_month">("every_3_weeks");
+  const [dayOfMonth, setDayOfMonth] = useState("1");
   const [nextSchedule, setNextSchedule] = useState("");
   const [service, setService] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -58,10 +63,36 @@ export default function PatientsPage() {
 
   async function handleAdd(event: FormEvent) {
     event.preventDefault();
+    
+    // Phone validation for PH numbers
+    const phoneRegex = /^(\+639|09)\d{9}$/;
+    if (!phoneRegex.test(phone.replace(/\s+/g, ""))) {
+      toast.error("Invalid phone number. Use format +639XXXXXXXXX or 09XXXXXXXXX");
+      return;
+    }
+    
     setSubmitting(true);
     try {
-      const payload: any = { name, phone, mode: "create" };
-      if (scheduleType) payload.scheduleType = scheduleType;
+      // Build schedule type and details
+      let scheduleType = "";
+      let scheduleDetails = "";
+      
+      if (scheduleTypeOption === "every_3_weeks") {
+        scheduleType = "Every 3 weeks";
+        scheduleDetails = "3 weeks";
+      } else if (scheduleTypeOption === "every_month") {
+        scheduleType = "Every month";
+        scheduleDetails = "1 month";
+      } else if (scheduleTypeOption === "every_day_of_month") {
+        scheduleType = "Every day of month";
+        scheduleDetails = `Day ${dayOfMonth}`;
+      }
+      
+      const payload: any = { name, phone: phone.replace(/\s+/g, ""), mode: "create" };
+      if (scheduleType) {
+        payload.scheduleType = scheduleType;
+        payload.scheduleDetails = scheduleDetails;
+      }
       if (nextSchedule) payload.nextSchedule = new Date(nextSchedule).toISOString();
       if (service) payload.service = service;
       
@@ -70,7 +101,8 @@ export default function PatientsPage() {
       setAddOpen(false);
       setName("");
       setPhone("");
-      setScheduleType("");
+      setScheduleTypeOption("every_3_weeks");
+      setDayOfMonth("1");
       setNextSchedule("");
       setService("");
       await load();
@@ -131,8 +163,9 @@ export default function PatientsPage() {
               <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs font-medium uppercase tracking-wide text-neutral-500">
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Phone</th>
-                <th className="px-3 py-2">Next appointment</th>
-                <th className="px-3 py-2">Recurrence</th>
+                <th className="px-3 py-2">Service</th>
+                <th className="px-3 py-2">Schedule</th>
+                <th className="px-3 py-2">Next</th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
@@ -150,21 +183,34 @@ export default function PatientsPage() {
                     </td>
                     <td className="px-3 py-2 text-neutral-600">{p.phone}</td>
                     <td className="px-3 py-2 text-neutral-600">
-                      {next
-                        ? new Date(next.startsAt).toLocaleString(undefined, {
-                            dateStyle: "medium",
-                            timeStyle: "short",
-                          })
-                        : "—"}
+                      {p.service || <span className="text-neutral-400">—</span>}
                     </td>
-                    <td className="px-3 py-2">
-                      {rule ? (
+                    <td className="px-3 py-2 text-neutral-600">
+                      {p.scheduleType ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-medium">{p.scheduleType}</span>
+                          {p.scheduleDetails && (
+                            <span className="text-xs text-neutral-500">{p.scheduleDetails}</span>
+                          )}
+                        </div>
+                      ) : rule ? (
                         <Badge status={rule.status === "active" ? "confirmed" : "scheduled"}>
                           {rule.status}
                         </Badge>
                       ) : (
-                        <span className="text-neutral-400">None</span>
+                        <span className="text-neutral-400">—</span>
                       )}
+                    </td>
+                    <td className="px-3 py-2 text-neutral-600">
+                      {next
+                        ? new Date(next.startsAt).toLocaleString(undefined, {
+                            dateStyle: "short",
+                          })
+                        : p.nextSchedule
+                        ? new Date(p.nextSchedule).toLocaleString(undefined, {
+                            dateStyle: "short",
+                          })
+                        : "—"}
                     </td>
                     <td className="px-3 py-2">
                       {hasNoAppointment && (
@@ -204,18 +250,51 @@ export default function PatientsPage() {
                 <Input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+639171234567"
+                  placeholder="+639171234567 or 09171234567"
                   required
                 />
+                <span className="text-xs text-neutral-500">Format: +639XXXXXXXXX or 09XXXXXXXXX</span>
               </label>
-              <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
-                Schedule type / occurrence
-                <Input
-                  value={scheduleType}
-                  onChange={(e) => setScheduleType(e.target.value)}
-                  placeholder="e.g. Every 3 months"
-                />
-              </label>
+              <fieldset className="flex flex-col gap-2 text-sm">
+                <legend className="font-medium text-neutral-700">Schedule type</legend>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="scheduleType"
+                    checked={scheduleTypeOption === "every_3_weeks"}
+                    onChange={() => setScheduleTypeOption("every_3_weeks")}
+                  />
+                  Every 3 weeks
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="scheduleType"
+                    checked={scheduleTypeOption === "every_month"}
+                    onChange={() => setScheduleTypeOption("every_month")}
+                  />
+                  Every month
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="scheduleType"
+                    checked={scheduleTypeOption === "every_day_of_month"}
+                    onChange={() => setScheduleTypeOption("every_day_of_month")}
+                  />
+                  Every day
+                  <Input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={dayOfMonth}
+                    onChange={(e) => setDayOfMonth(e.target.value)}
+                    disabled={scheduleTypeOption !== "every_day_of_month"}
+                    className="w-16 inline-block"
+                  />
+                  of the month
+                </label>
+              </fieldset>
               <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
                 Next schedule
                 <Input
