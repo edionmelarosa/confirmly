@@ -27,9 +27,26 @@ function formatPhone(phone: string): string {
   return phone;
 }
 
-function truncateBody(body: string, maxLength = 60): string {
-  if (body.length <= maxLength) return body;
-  return body.slice(0, maxLength) + "...";
+function linkifyBody(body: string): React.ReactNode {
+  const urlPattern = /(https?:\/\/[^\s]+)/g;
+  const parts = body.split(urlPattern);
+  
+  return parts.map((part, index) => {
+    if (part.match(urlPattern)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 underline hover:text-blue-800"
+        >
+          {part}
+        </a>
+      );
+    }
+    return <span key={index}>{part}</span>;
+  });
 }
 
 export default function SmsLogsPage() {
@@ -115,7 +132,7 @@ export default function SmsLogsPage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-neutral-700">{truncateBody(log.body)}</p>
+                  <p className="text-sm text-neutral-700 whitespace-pre-wrap break-words">{linkifyBody(log.body)}</p>
                   {log.providerStatus !== "logged" && log.providerStatus !== "sent" && (
                     <p className="text-xs text-neutral-500">Status: {log.providerStatus}</p>
                   )}
