@@ -117,10 +117,10 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
     setSubmitting(true);
     try {
       await apiClient.post(`/appointments/${existing.id}/resend-reminder`);
-      toast.success("Reminder resent.");
+      toast.success("Reminder sent.");
+      onSaved();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Something went wrong");
-    } finally {
       setSubmitting(false);
     }
   }
@@ -147,48 +147,53 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
               {existing.recurrenceRuleId ? (
                 <p className="text-sm text-neutral-600">Part of a recurrence rule</p>
               ) : null}
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleStatusOverride("confirmed")}
-                  disabled={submitting || existing.status === "confirmed"}
-                >
-                  Force confirm
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleStatusOverride("completed")}
-                  disabled={submitting || existing.status === "completed"}
-                >
-                  Mark completed
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setPendingAction("no_show")}
-                  disabled={submitting || existing.status === "no_show"}
-                >
-                  Mark no-show
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleResendReminder}
-                  disabled={submitting || existing.status === "cancelled"}
-                >
-                  Resend reminder now
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setPendingAction("cancel")}
-                  disabled={submitting || existing.status === "cancelled"}
-                >
-                  Cancel appointment
-                </Button>
-              </div>
+              {existing.status === "scheduled" || existing.status === "confirmed" ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleStatusOverride("confirmed")}
+                    disabled={submitting || existing.status === "confirmed"}
+                  >
+                    Force confirm
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleStatusOverride("completed")}
+                    disabled={submitting}
+                  >
+                    Mark completed
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setPendingAction("no_show")}
+                    disabled={submitting}
+                  >
+                    Mark no-show
+                  </Button>
+                  {!existing.reminderSentAt && (
+                    <Button variant="secondary" size="sm" onClick={handleResendReminder} disabled={submitting}>
+                      Send reminder now
+                    </Button>
+                  )}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setPendingAction("cancel")}
+                    disabled={submitting}
+                  >
+                    Cancel appointment
+                  </Button>
+                </div>
+              ) : null}
+              {existing.reminderSentAt ? (
+                <p className="text-sm text-neutral-500">
+                  Reminder sent{" "}
+                  {new Date(existing.reminderSentAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                </p>
+              ) : null}
             </DialogBody>
             <DialogFooter>
               <Button type="button" variant="secondary" onClick={onClose}>

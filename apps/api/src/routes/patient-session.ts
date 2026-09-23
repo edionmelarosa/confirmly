@@ -162,8 +162,6 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
         startsAt: appointment.startsAt.toISOString(),
         endsAt: appointment.endsAt.toISOString(),
         status: appointment.status,
-        sessionOfDay: appointment.sessionOfDay,
-        isSessionCapacity: appointment.isSessionCapacity,
       },
       clinic: {
         name: appointment.clinic.name,
@@ -393,6 +391,8 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
         startsAt: appointment.startsAt.toISOString(),
         endsAt: appointment.endsAt.toISOString(),
         status: appointment.status,
+        sessionOfDay: appointment.sessionOfDay,
+        isSessionCapacity: appointment.isSessionCapacity,
       });
     } catch (err) {
       if (err instanceof SessionFullError) {

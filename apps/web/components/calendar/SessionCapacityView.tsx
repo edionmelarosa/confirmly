@@ -15,6 +15,11 @@ import { useToast } from "@/components/ui/ToastProvider";
 
 type SessionKey = "am" | "pm";
 
+// Completed / no-show / cancelled are final — no further actions offered.
+function isActive(status: AppointmentDto["status"]): boolean {
+  return status === "scheduled" || status === "confirmed";
+}
+
 export function SessionCapacityView() {
   const toast = useToast();
   const [day, setDay] = useState(() => new Date());
@@ -60,7 +65,7 @@ export function SessionCapacityView() {
     const result: Record<SessionKey, AppointmentDto[]> = { am: [], pm: [] };
     if (!appointments) return result;
     for (const a of appointments) {
-      if (!a.isSessionCapacity || a.status === "cancelled" || a.status === "no_show") continue;
+      if (!a.isSessionCapacity || a.status === "cancelled") continue;
       const local = new Date(a.startsAt);
       const ymd = toDateInputValue(local);
       if (ymd !== dateYmd) continue;
@@ -117,10 +122,11 @@ export function SessionCapacityView() {
   async function resendReminder(id: string) {
     try {
       await apiClient.post(`/appointments/${id}/resend-reminder`);
-      toast.success("Reminder resent.");
+      toast.success("Reminder sent.");
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Something went wrong");
     }
+    await fetchAll();
   }
 
   async function cancelAppointment(id: string) {
@@ -170,7 +176,9 @@ export function SessionCapacityView() {
         const list = bySession[key];
         const cap = caps[key];
         const label = key === "am" ? "Morning" : "Afternoon";
-        const full = cap > 0 && list.length >= cap;
+        // No-shows stay listed for the record but don't occupy capacity (matches the server count).
+        const booked = list.filter((a) => a.status !== "no_show").length;
+        const full = cap > 0 && booked >= cap;
         return (
           <div key={key} className="max-w-lg rounded-md border border-neutral-200">
             <button
@@ -179,7 +187,7 @@ export function SessionCapacityView() {
               onClick={() => setExpanded(expanded === key ? null : key)}
             >
               <span className="font-medium text-neutral-900">
-                {label}: {list.length}/{cap || "—"} booked
+                {label}: {booked}/{cap || "—"} booked
               </span>
               <Button
                 type="button"
@@ -208,18 +216,26 @@ export function SessionCapacityView() {
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge status={a.status}>{a.status.replace("_", " ")}</Badge>
-                          <Button type="button" size="sm" variant="secondary" onClick={() => resendReminder(a.id)} disabled={a.status === "cancelled"}>
-                            Send reminder
-                          </Button>
-                          <Button type="button" size="sm" variant="secondary" onClick={() => markStatus(a.id, "completed")} disabled={a.status === "cancelled"}>
-                            Complete
-                          </Button>
-                          <Button type="button" size="sm" variant="secondary" onClick={() => markStatus(a.id, "no_show")} disabled={a.status === "cancelled"}>
-                            No-show
-                          </Button>
-                          <Button type="button" size="sm" variant="destructive" onClick={() => cancelAppointment(a.id)} disabled={a.status === "cancelled"}>
-                            Cancel
-                          </Button>
+                          {isActive(a.status) && (
+                            <>
+                              {a.reminderSentAt ? (
+                                <span className="text-xs text-neutral-500">Reminder sent</span>
+                              ) : (
+                                <Button type="button" size="sm" variant="secondary" onClick={() => resendReminder(a.id)}>
+                                  Send reminder
+                                </Button>
+                              )}
+                              <Button type="button" size="sm" variant="secondary" onClick={() => markStatus(a.id, "completed")}>
+                                Complete
+                              </Button>
+                              <Button type="button" size="sm" variant="secondary" onClick={() => markStatus(a.id, "no_show")}>
+                                No-show
+                              </Button>
+                              <Button type="button" size="sm" variant="destructive" onClick={() => cancelAppointment(a.id)}>
+                                Cancel
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </li>
                     );

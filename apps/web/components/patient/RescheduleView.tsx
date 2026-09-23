@@ -11,7 +11,7 @@ type SupportedSession = RescheduleSessionResponse | ManageSessionResponse | Invi
 interface RescheduleViewProps {
   token: string;
   session: SupportedSession;
-  onRescheduled: (newTime: string) => void;
+  onRescheduled: (newTime: string, slot?: AvailableSlotDto) => void;
 }
 
 export function RescheduleView({ token, session, onRescheduled }: RescheduleViewProps) {
@@ -47,13 +47,13 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
           sessionOfDay: slot.sessionOfDay,
         });
         const slotDate = new Date(slot.date + "T12:00:00");
-        onRescheduled(slotDate.toISOString());
+        onRescheduled(slotDate.toISOString(), slot);
       } else {
         await apiClient.post(endpoint, {
           startsAt: slot.startsAt,
           endsAt: slot.endsAt,
         });
-        onRescheduled(slot.startsAt);
+        onRescheduled(slot.startsAt, slot);
       }
     } catch (err) {
       if (err instanceof ApiError) {

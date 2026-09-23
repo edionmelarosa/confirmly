@@ -2,9 +2,33 @@
 
 import { useEffect, useState } from "react";
 import { apiClient, ApiError } from "@/lib/api-client";
-import type { PatientSessionResponse } from "@confirmly/shared-types";
+import type { AvailableSlotDto, PatientSessionResponse } from "@confirmly/shared-types";
 import { RescheduleView } from "./RescheduleView";
 import { WaitlistClaimView } from "./WaitlistClaimView";
+
+function formatBookedSlot(slot: AvailableSlotDto, timeZone: string): string {
+  if (slot.kind === "session") {
+    // "YYYY-MM-DD" is already the clinic-local date; format it as-is.
+    const [y, m, d] = slot.date.split("-").map(Number);
+    const date = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-PH", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+    return `${date} · ${slot.sessionOfDay === "am" ? "Morning" : "Afternoon"}`;
+  }
+  return new Date(slot.startsAt).toLocaleString("en-PH", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone,
+  });
+}
 
 interface PatientSessionViewProps {
   token: string;
@@ -16,7 +40,7 @@ type ViewState =
   | { status: "ready"; session: PatientSessionResponse }
   | { status: "rescheduled"; newTime: string; timezone: string }
   | { status: "claimed" }
-  | { status: "booked" };
+  | { status: "booked"; slot: AvailableSlotDto; clinicName: string; timezone: string };
 
 export function PatientSessionView({ token }: PatientSessionViewProps) {
   const [state, setState] = useState<ViewState>({ status: "loading" });
@@ -83,9 +107,13 @@ export function PatientSessionView({ token }: PatientSessionViewProps) {
 
   if (state.status === "booked") {
     return (
-      <div className="text-center">
+      <div className="flex flex-col items-center gap-3 text-center">
         <p className="text-lg font-medium text-status-confirmed">You&apos;re booked!</p>
-        <p className="mt-2 text-neutral-600">We&apos;ll send you an SMS reminder before your appointment.</p>
+        <p className="text-neutral-700">Your appointment with {state.clinicName} is scheduled for:</p>
+        <p className="text-lg font-semibold text-neutral-900">{formatBookedSlot(state.slot, state.timezone)}</p>
+        <p className="text-sm text-neutral-600">
+          Please arrive a few minutes early. If you need to change your appointment, please contact the clinic.
+        </p>
       </div>
     );
   }
@@ -110,7 +138,19 @@ export function PatientSessionView({ token }: PatientSessionViewProps) {
 
   if (state.session.purpose === "invite_to_book") {
     return (
-      <RescheduleView token={token} session={state.session} onRescheduled={() => setState({ status: "booked" })} />
+      <RescheduleView
+        token={token}
+        session={state.session}
+        onRescheduled={(_newTime, slot) => {
+          if (!slot) return;
+          setState({
+            status: "booked",
+            slot,
+            clinicName: state.session.clinic.name,
+            timezone: state.session.clinic.timezone,
+          });
+        }}
+      />
     );
   }
 
