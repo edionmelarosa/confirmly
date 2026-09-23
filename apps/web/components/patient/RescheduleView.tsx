@@ -9,7 +9,7 @@ import { PatientButton } from "./PatientButton";
 interface RescheduleViewProps {
   token: string;
   session: RescheduleSessionResponse;
-  onRescheduled: () => void;
+  onRescheduled: (newTime: string) => void;
 }
 
 export function RescheduleView({ token, session, onRescheduled }: RescheduleViewProps) {
@@ -39,18 +39,26 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
           date: slot.date,
           sessionOfDay: slot.sessionOfDay,
         });
+        const slotDate = new Date(slot.date + "T12:00:00");
+        onRescheduled(slotDate.toISOString());
       } else {
         await apiClient.post(`/api/patient/session/${token}/reschedule`, {
           startsAt: slot.startsAt,
           endsAt: slot.endsAt,
         });
+        onRescheduled(slot.startsAt);
       }
-      onRescheduled();
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setSubmitError("That time was just taken. Please pick another.");
-      } else if (err instanceof ApiError && err.status === 410) {
-        setSubmitError("This link has expired or was already used.");
+      if (err instanceof ApiError) {
+        if (err.status === 409) {
+          setSubmitError("That time was just taken. Please pick another.");
+        } else if (err.status === 410) {
+          setSubmitError("This link has expired or was already used.");
+        } else if (err.status === 400) {
+          setSubmitError("Unable to reschedule. Please contact the clinic.");
+        } else {
+          setSubmitError(`Something went wrong (${err.status}). Please try again or contact the clinic.`);
+        }
       } else {
         setSubmitError("Something went wrong. Please try again.");
       }
@@ -66,9 +74,53 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
   function slotLabel(slot: AvailableSlotDto): string {
     if (slot.kind === "session") {
       const label = slot.sessionOfDay === "am" ? "Morning" : "Afternoon";
-      return `${slot.date} · ${label} (${slot.remaining} left)`;
+      return `${label} (${slot.remaining} left)`;
     }
     return formatInClinicTz(slot.startsAt, clinic.timezone);
+  }
+
+  function getSlotDate(slot: AvailableSlotDto): string {
+    if (slot.kind === "session") {
+      return slot.date;
+    }
+    return new Date(slot.startsAt).toISOString().split("T")[0];
+  }
+
+  function groupSlotsByDate(slots: AvailableSlotDto[]): Map<string, AvailableSlotDto[]> {
+    const grouped = new Map<string, AvailableSlotDto[]>();
+    for (const slot of slots) {
+      const date = getSlotDate(slot);
+      if (!grouped.has(date)) {
+        grouped.set(date, []);
+      }
+      grouped.get(date)!.push(slot);
+    }
+    return grouped;
+  }
+
+  function formatDateHeader(dateStr: string): string {
+    const date = new Date(dateStr + "T12:00:00");
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (
+      date.getFullYear() === today.getFullYear() &&
+      date.getMonth() === today.getMonth() &&
+      date.getDate() === today.getDate()
+    ) {
+      return "Today";
+    }
+
+    if (
+      date.getFullYear() === tomorrow.getFullYear() &&
+      date.getMonth() === tomorrow.getMonth() &&
+      date.getDate() === tomorrow.getDate()
+    ) {
+      return "Tomorrow";
+    }
+
+    return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   }
 
   const currentLabel =
@@ -89,25 +141,32 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
       {!showSlots ? (
         <PatientButton onClick={loadSlots}>Choose a new time</PatientButton>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-4">
           {submitError && <p className="text-status-cancelled">{submitError}</p>}
           {slots.length === 0 ? (
             <p className="text-neutral-500">Loading available times…</p>
           ) : (
-            <ul className="flex flex-col gap-2">
-              {slots.map((slot) => (
-                <li key={slotKey(slot)}>
-                  <PatientButton
-                    variant="secondary"
-                    onClick={() => handlePickSlot(slot)}
-                    disabled={submitting}
-                    className="w-full text-left"
-                  >
-                    {slotLabel(slot)}
-                  </PatientButton>
-                </li>
+            <div className="flex flex-col gap-4">
+              {Array.from(groupSlotsByDate(slots)).map(([date, dateSlots]) => (
+                <div key={date} className="flex flex-col gap-2">
+                  <h3 className="text-sm font-semibold text-neutral-700">{formatDateHeader(date)}</h3>
+                  <ul className="flex flex-col gap-2">
+                    {dateSlots.map((slot) => (
+                      <li key={slotKey(slot)}>
+                        <PatientButton
+                          variant="secondary"
+                          onClick={() => handlePickSlot(slot)}
+                          disabled={submitting}
+                          className="w-full text-left"
+                        >
+                          {slotLabel(slot)}
+                        </PatientButton>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       )}

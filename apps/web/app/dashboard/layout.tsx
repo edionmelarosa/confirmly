@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { getApiUrl } from "@/lib/api-url";
 
@@ -23,6 +24,13 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get("confirmly_session");
+
+  if (!sessionCookie) {
+    redirect("/login");
+  }
+
   const clinicName = await getClinicName();
 
   return (
