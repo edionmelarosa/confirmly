@@ -100,7 +100,11 @@ export default function SmsLogsPage() {
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center gap-2">
                     <Badge status="neutral">
-                      {log.direction === "out" ? "Sent" : "Received"}
+                      {log.direction === "out"
+                        ? log.providerStatus === "logged"
+                          ? "Logged"
+                          : "Sent"
+                        : "Received"}
                     </Badge>
                     <span className="text-sm font-medium text-neutral-900">
                       {formatPhone(log.phone)}
