@@ -12,6 +12,9 @@ async function getClinicName(): Promise<string> {
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      redirect("/login");
+    }
     return "Confirmly";
   }
 
