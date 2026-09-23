@@ -10,11 +10,23 @@ export interface SendClinicSmsParams {
 }
 
 export function createSmsService(env: Env, sender: SmsSender = createSmsSender("semaphore", {
-  apiKey: env.SEMAPHORE_API_KEY,
+  apiKey: env.SEMAPHORE_API_KEY ?? "",
   senderName: env.SEMAPHORE_SENDER_NAME,
 })) {
   async function send(params: SendClinicSmsParams) {
-    const result = await sender.sendSms(params.to, params.body);
+    let result: Awaited<ReturnType<SmsSender["sendSms"]>>;
+
+    if (env.SMS_MODE === "log") {
+      console.log(`[sms:log] to=${params.to} body=${params.body}`);
+      result = {
+        success: true,
+        providerStatus: "logged",
+        providerMessageId: null,
+        errorMessage: null,
+      };
+    } else {
+      result = await sender.sendSms(params.to, params.body);
+    }
 
     await prisma.smsLog.create({
       data: {
