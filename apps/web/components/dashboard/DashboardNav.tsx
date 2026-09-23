@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Calendar, ClipboardList, Menu, Settings, LogOut, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { apiClient } from "@/lib/api-client";
@@ -18,12 +18,11 @@ const NAV_LINKS = [
 
 export function DashboardNav({ clinicName }: { clinicName: string }) {
   const pathname = usePathname();
-  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   async function handleLogout() {
     await apiClient.post("/auth/logout");
-    router.push("/login");
+    window.location.href = "/login";
   }
 
   return (
