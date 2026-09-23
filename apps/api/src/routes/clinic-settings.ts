@@ -5,7 +5,7 @@ import { requireAuth } from "../auth/guard";
 
 const updateSchema = z.object({
   reminderLeadHours: z.coerce.number().int().positive().optional(),
-  smsSenderName: z.string().min(1).optional(),
+  reminderLeadDays: z.coerce.number().int().positive().optional(),
   schedulingMode: z.enum(["fixed_time", "session_capacity"]).optional(),
   sessionCapacityAm: z.coerce.number().int().positive().nullable().optional(),
   sessionCapacityPm: z.coerce.number().int().positive().nullable().optional(),
@@ -20,6 +20,7 @@ function toDto(clinic: {
   timezone: string;
   smsSenderName: string;
   reminderLeadHours: number;
+  reminderLeadDays: number;
   schedulingMode: string;
   sessionCapacityAm: number | null;
   sessionCapacityPm: number | null;
@@ -31,8 +32,8 @@ function toDto(clinic: {
   return {
     name: clinic.name,
     timezone: clinic.timezone,
-    smsSenderName: clinic.smsSenderName,
     reminderLeadHours: clinic.reminderLeadHours,
+    reminderLeadDays: clinic.reminderLeadDays,
     schedulingMode: clinic.schedulingMode,
     sessionCapacityAm: clinic.sessionCapacityAm,
     sessionCapacityPm: clinic.sessionCapacityPm,

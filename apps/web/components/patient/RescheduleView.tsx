@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import { apiClient, ApiError } from "@/lib/api-client";
-import type { AvailableSlotDto, RescheduleSessionResponse } from "@confirmly/shared-types";
+import type { AvailableSlotDto, RescheduleSessionResponse, ManageSessionResponse, InviteToBookSessionResponse } from "@confirmly/shared-types";
 import { formatInClinicTz } from "./format";
 import { PatientButton } from "./PatientButton";
 
+type SupportedSession = RescheduleSessionResponse | ManageSessionResponse | InviteToBookSessionResponse;
+
 interface RescheduleViewProps {
   token: string;
-  session: RescheduleSessionResponse;
+  session: SupportedSession;
   onRescheduled: (newTime: string) => void;
 }
 
@@ -18,7 +20,8 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const { appointment, clinic } = session;
+  const appointment = session.purpose === "invite_to_book" ? undefined : session.appointment;
+  const clinic = session.clinic;
 
   async function loadSlots() {
     setShowSlots(true);
@@ -34,15 +37,19 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const endpoint = session.purpose === "invite_to_book" 
+        ? `/api/patient/session/${token}/book`
+        : `/api/patient/session/${token}/reschedule`;
+      
       if (slot.kind === "session") {
-        await apiClient.post(`/api/patient/session/${token}/reschedule`, {
+        await apiClient.post(endpoint, {
           date: slot.date,
           sessionOfDay: slot.sessionOfDay,
         });
         const slotDate = new Date(slot.date + "T12:00:00");
         onRescheduled(slotDate.toISOString());
       } else {
-        await apiClient.post(`/api/patient/session/${token}/reschedule`, {
+        await apiClient.post(endpoint, {
           startsAt: slot.startsAt,
           endsAt: slot.endsAt,
         });
@@ -123,23 +130,57 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
     return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   }
 
-  const currentLabel =
-    appointment.isSessionCapacity && appointment.sessionOfDay
+  const currentLabel = appointment
+    ? appointment.isSessionCapacity && appointment.sessionOfDay
       ? `${new Date(appointment.startsAt).toLocaleDateString()} · ${
           appointment.sessionOfDay === "am" ? "Morning" : "Afternoon"
         }`
-      : formatInClinicTz(appointment.startsAt, clinic.timezone);
+      : formatInClinicTz(appointment.startsAt, clinic.timezone)
+    : null;
+
+  const actionLabel = session.purpose === "invite_to_book" 
+    ? "Choose a time"
+    : session.purpose === "manage"
+    ? "Reschedule or cancel"
+    : "Choose a new time";
 
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">{clinic.name}</h1>
-        <p className="mt-1 text-neutral-700">Current appointment: {currentLabel}</p>
-        <p className="text-sm text-neutral-500">Status: {appointment.status}</p>
+        {currentLabel && <p className="mt-1 text-neutral-700">Current appointment: {currentLabel}</p>}
+        {appointment && <p className="text-sm text-neutral-500">Status: {appointment.status}</p>}
+        {session.purpose === "invite_to_book" && (
+          <p className="mt-1 text-neutral-700">Book your appointment</p>
+        )}
       </div>
 
       {!showSlots ? (
-        <PatientButton onClick={loadSlots}>Choose a new time</PatientButton>
+        <>
+          <PatientButton onClick={loadSlots}>{actionLabel}</PatientButton>
+          {session.purpose === "manage" && appointment && (
+            <PatientButton 
+              variant="secondary" 
+              onClick={async () => {
+                if (!confirm("Cancel this appointment?")) return;
+                setSubmitting(true);
+                try {
+                  await apiClient.post(`/api/patient/session/${token}/cancel`);
+                  onRescheduled("");
+                } catch (err) {
+                  if (err instanceof ApiError) {
+                    setSubmitError("Failed to cancel. Please contact the clinic.");
+                  }
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+              disabled={submitting}
+            >
+              Cancel appointment
+            </PatientButton>
+          )}
+        </>
       ) : (
         <div className="flex flex-col gap-4">
           {submitError && <p className="text-status-cancelled">{submitError}</p>}

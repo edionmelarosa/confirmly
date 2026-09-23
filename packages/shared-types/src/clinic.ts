@@ -4,8 +4,8 @@ export type SessionOfDay = "am" | "pm";
 export interface ClinicSettingsDto {
   name: string;
   timezone: string;
-  smsSenderName: string;
   reminderLeadHours: number;
+  reminderLeadDays: number;
   schedulingMode: SchedulingMode;
   sessionCapacityAm: number | null;
   sessionCapacityPm: number | null;
@@ -16,8 +16,8 @@ export interface ClinicSettingsDto {
 }
 
 export interface UpdateClinicSettingsInput {
-  smsSenderName?: string;
   reminderLeadHours?: number;
+  reminderLeadDays?: number;
   schedulingMode?: SchedulingMode;
   sessionCapacityAm?: number | null;
   sessionCapacityPm?: number | null;

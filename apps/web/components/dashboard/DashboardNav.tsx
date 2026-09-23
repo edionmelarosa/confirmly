@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, ClipboardList, Menu, Settings, LogOut, Users, MessageSquare } from "lucide-react";
+import { Calendar, Menu, Settings, LogOut, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/Button";
@@ -12,8 +12,6 @@ import { Dialog, DialogBody, DialogHeader, DialogTitle } from "@/components/ui/D
 const NAV_LINKS = [
   { href: "/dashboard/appointments", label: "Appointments", icon: Calendar },
   { href: "/dashboard/patients", label: "Patients", icon: Users },
-  { href: "/dashboard/waitlist", label: "Waitlist", icon: ClipboardList },
-  { href: "/dashboard/messages", label: "Messages", icon: MessageSquare },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 

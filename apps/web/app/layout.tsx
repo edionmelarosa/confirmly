@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   description: "SMS-first scheduling and no-show recovery for small clinics.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"

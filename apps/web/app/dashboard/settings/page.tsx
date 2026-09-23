@@ -12,11 +12,14 @@ import { useToast } from "@/components/ui/ToastProvider";
 export default function SettingsPage() {
   const toast = useToast();
   const [settings, setSettings] = useState<ClinicSettingsDto | null>(null);
-  const [smsSenderName, setSmsSenderName] = useState("");
-  const [reminderLeadHours, setReminderLeadHours] = useState("");
+  const [reminderLeadDays, setReminderLeadDays] = useState("1");
   const [schedulingMode, setSchedulingMode] = useState<SchedulingMode>("fixed_time");
   const [sessionCapacityAm, setSessionCapacityAm] = useState("15");
   const [sessionCapacityPm, setSessionCapacityPm] = useState("10");
+  const [sessionAmStartHour, setSessionAmStartHour] = useState("8");
+  const [sessionAmEndHour, setSessionAmEndHour] = useState("12");
+  const [sessionPmStartHour, setSessionPmStartHour] = useState("13");
+  const [sessionPmEndHour, setSessionPmEndHour] = useState("18");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -24,11 +27,14 @@ export default function SettingsPage() {
       .get<ClinicSettingsDto>("/clinic-settings")
       .then((data) => {
         setSettings(data);
-        setSmsSenderName(data.smsSenderName);
-        setReminderLeadHours(String(data.reminderLeadHours));
+        setReminderLeadDays(String(data.reminderLeadDays));
         setSchedulingMode(data.schedulingMode);
         setSessionCapacityAm(String(data.sessionCapacityAm ?? 15));
         setSessionCapacityPm(String(data.sessionCapacityPm ?? 10));
+        setSessionAmStartHour(String(data.sessionAmStartHour));
+        setSessionAmEndHour(String(data.sessionAmEndHour));
+        setSessionPmStartHour(String(data.sessionPmStartHour));
+        setSessionPmEndHour(String(data.sessionPmEndHour));
       })
       .catch((err) => {
         toast.error(err instanceof ApiError ? err.message : "Failed to load settings");
@@ -41,13 +47,16 @@ export default function SettingsPage() {
     setSubmitting(true);
     try {
       const payload: Record<string, unknown> = {
-        smsSenderName,
-        reminderLeadHours: Number(reminderLeadHours),
+        reminderLeadDays: Number(reminderLeadDays),
         schedulingMode,
       };
       if (schedulingMode === "session_capacity") {
         payload.sessionCapacityAm = Number(sessionCapacityAm);
         payload.sessionCapacityPm = Number(sessionCapacityPm);
+        payload.sessionAmStartHour = Number(sessionAmStartHour);
+        payload.sessionAmEndHour = Number(sessionAmEndHour);
+        payload.sessionPmStartHour = Number(sessionPmStartHour);
+        payload.sessionPmEndHour = Number(sessionPmEndHour);
       }
       const updated = await apiClient.patch<ClinicSettingsDto>("/clinic-settings", payload);
       setSettings(updated);
@@ -80,16 +89,12 @@ export default function SettingsPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
-              SMS sender name
-              <Input value={smsSenderName} onChange={(e) => setSmsSenderName(e.target.value)} required />
-            </label>
-            <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
-              Reminder lead time (hours before appointment)
+              Reminder lead time (days before appointment)
               <Input
                 type="number"
                 min={1}
-                value={reminderLeadHours}
-                onChange={(e) => setReminderLeadHours(e.target.value)}
+                value={reminderLeadDays}
+                onChange={(e) => setReminderLeadDays(e.target.value)}
                 required
               />
             </label>
@@ -138,6 +143,54 @@ export default function SettingsPage() {
                     required
                   />
                 </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                    Morning start hour
+                    <Input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={sessionAmStartHour}
+                      onChange={(e) => setSessionAmStartHour(e.target.value)}
+                      required
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                    Morning end hour
+                    <Input
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={sessionAmEndHour}
+                      onChange={(e) => setSessionAmEndHour(e.target.value)}
+                      required
+                    />
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                    Afternoon start hour
+                    <Input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={sessionPmStartHour}
+                      onChange={(e) => setSessionPmStartHour(e.target.value)}
+                      required
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                    Afternoon end hour
+                    <Input
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={sessionPmEndHour}
+                      onChange={(e) => setSessionPmEndHour(e.target.value)}
+                      required
+                    />
+                  </label>
+                </div>
               </>
             )}
 
