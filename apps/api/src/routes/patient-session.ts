@@ -1,7 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@confirmly/db";
-import type { AvailableSlotDto, PatientSessionResponse, WaitlistClaimResponse } from "@confirmly/shared-types";
+import type {
+  AvailableSlotDto,
+  PatientSessionResponse,
+  SessionHoursDto,
+  WaitlistClaimResponse,
+} from "@confirmly/shared-types";
 import type { SmsService } from "../services/sms";
 import { resolveAccessToken, markAccessTokenUsed } from "../services/tokens";
 import { appointmentsService, DoubleBookingError } from "../services/appointments";
@@ -20,6 +25,18 @@ const rescheduleSchema = z.object({
   sessionOfDay: z.enum(["am", "pm"]).optional(),
 });
 
+function sessionHoursOf(clinic: {
+  sessionAmStartHour: number;
+  sessionAmEndHour: number;
+  sessionPmStartHour: number;
+  sessionPmEndHour: number;
+}): SessionHoursDto {
+  return {
+    am: { startHour: clinic.sessionAmStartHour, endHour: clinic.sessionAmEndHour },
+    pm: { startHour: clinic.sessionPmStartHour, endHour: clinic.sessionPmEndHour },
+  };
+}
+
 async function buildAvailableSlots(clinicId: string, resourceId: string | null): Promise<AvailableSlotDto[]> {
   const clinic = await prisma.clinic.findUniqueOrThrow({ where: { id: clinicId } });
   const now = new Date();
@@ -30,12 +47,13 @@ async function buildAvailableSlots(clinicId: string, resourceId: string | null):
       const d = new Date(now.getTime() + day * 24 * 60 * 60 * 1000);
       const dateYmd = sessionsService.dateYmdInTimeZone(d, clinic.timezone);
       for (const sessionOfDay of ["am", "pm"] as const) {
-        const { remaining, capacity } = await sessionsService.remainingSessionCapacity(
+        const { remaining, capacity, endsAt } = await sessionsService.remainingSessionCapacity(
           clinicId,
           dateYmd,
           sessionOfDay,
         );
-        if (remaining > 0) {
+        // Don't offer a session that is already over (e.g. this morning, viewed in the afternoon).
+        if (remaining > 0 && endsAt.getTime() > now.getTime()) {
           slots.push({ kind: "session", date: dateYmd, sessionOfDay, remaining, capacity });
         }
       }
@@ -134,6 +152,7 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
           name: patient.clinic.name,
           timezone: patient.clinic.timezone,
           schedulingMode: patient.clinic.schedulingMode,
+          sessionHours: sessionHoursOf(patient.clinic),
         },
         patientId: patient.id,
         patientName: patient.name,
@@ -169,6 +188,7 @@ export function registerPatientSessionRoutes(app: FastifyInstance, smsService: S
         name: appointment.clinic.name,
         timezone: appointment.clinic.timezone,
         schedulingMode: appointment.clinic.schedulingMode,
+        sessionHours: sessionHoursOf(appointment.clinic),
       },
     };
 

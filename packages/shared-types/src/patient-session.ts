@@ -9,10 +9,16 @@ export interface PatientSessionAppointmentDto {
   isSessionCapacity?: boolean;
 }
 
+export interface SessionHoursDto {
+  am: { startHour: number; endHour: number };
+  pm: { startHour: number; endHour: number };
+}
+
 export interface PatientSessionClinicDto {
   name: string;
   timezone: string;
   schedulingMode?: "fixed_time" | "session_capacity";
+  sessionHours?: SessionHoursDto;
 }
 
 export interface RescheduleSessionResponse {
