@@ -5,10 +5,10 @@ import { RefreshCw, CalendarX2, Clock } from "lucide-react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { AppointmentDto } from "@confirmly/shared-types";
 import { AppointmentForm } from "./AppointmentForm";
-import { buildSlotsForDay, formatSlotTime, toDateInputValue } from "./slots";
+import { buildSlotsForDay, formatSlotTime } from "./slots";
+import { DateQuickNav } from "./DateQuickNav";
 import type { Slot } from "./types";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -62,14 +62,7 @@ export function DayCalendar() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
-          Date
-          <Input
-            type="date"
-            value={toDateInputValue(day)}
-            onChange={(e) => setDay(new Date(`${e.target.value}T00:00:00`))}
-          />
-        </label>
+        <DateQuickNav day={day} onChange={setDay} />
         <Button type="button" variant="secondary" onClick={handleRefresh} disabled={refreshing}>
           <RefreshCw className={refreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
           Refresh

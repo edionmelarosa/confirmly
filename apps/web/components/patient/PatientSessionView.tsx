@@ -15,7 +15,8 @@ type ViewState =
   | { status: "error"; message: string }
   | { status: "ready"; session: PatientSessionResponse }
   | { status: "rescheduled"; newTime: string; timezone: string }
-  | { status: "claimed" };
+  | { status: "claimed" }
+  | { status: "booked" };
 
 export function PatientSessionView({ token }: PatientSessionViewProps) {
   const [state, setState] = useState<ViewState>({ status: "loading" });
@@ -26,9 +27,11 @@ export function PatientSessionView({ token }: PatientSessionViewProps) {
       .then((session) => setState({ status: "ready", session }))
       .catch((err) => {
         const message =
-          err instanceof ApiError && err.status === 410
-            ? "This link has expired or was already used."
-            : "Something went wrong loading your appointment.";
+          err instanceof ApiError && err.code === "already_booked"
+            ? "You already have an upcoming appointment. Please contact the clinic to change it."
+            : err instanceof ApiError && err.status === 410
+              ? "This link has expired or was already used."
+              : "Something went wrong loading your appointment.";
         setState({ status: "error", message });
       });
   }, [token]);
@@ -78,6 +81,15 @@ export function PatientSessionView({ token }: PatientSessionViewProps) {
     );
   }
 
+  if (state.status === "booked") {
+    return (
+      <div className="text-center">
+        <p className="text-lg font-medium text-status-confirmed">You&apos;re booked!</p>
+        <p className="mt-2 text-neutral-600">We&apos;ll send you an SMS reminder before your appointment.</p>
+      </div>
+    );
+  }
+
   if (state.session.purpose === "waitlist_claim") {
     return (
       <WaitlistClaimView token={token} session={state.session} onClaimed={() => setState({ status: "claimed" })} />
@@ -98,13 +110,7 @@ export function PatientSessionView({ token }: PatientSessionViewProps) {
 
   if (state.session.purpose === "invite_to_book") {
     return (
-      <RescheduleView
-        token={token}
-        session={state.session}
-        onRescheduled={(newTime: string) =>
-          setState({ status: "rescheduled", newTime, timezone: state.session.clinic.timezone })
-        }
-      />
+      <RescheduleView token={token} session={state.session} onRescheduled={() => setState({ status: "booked" })} />
     );
   }
 

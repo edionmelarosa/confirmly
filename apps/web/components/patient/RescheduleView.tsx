@@ -57,7 +57,9 @@ export function RescheduleView({ token, session, onRescheduled }: RescheduleView
       }
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.status === 409) {
+        if (err.code === "already_booked") {
+          setSubmitError("You already have an upcoming appointment. Please contact the clinic to change it.");
+        } else if (err.status === 409) {
           setSubmitError("That time was just taken. Please pick another.");
         } else if (err.status === 410) {
           setSubmitError("This link has expired or was already used.");

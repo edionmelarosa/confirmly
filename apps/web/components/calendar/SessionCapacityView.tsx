@@ -5,6 +5,7 @@ import { RefreshCw } from "lucide-react";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { AppointmentDto, ClinicSettingsDto } from "@confirmly/shared-types";
 import { toDateInputValue } from "./slots";
+import { DateQuickNav } from "./DateQuickNav";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
@@ -24,6 +25,7 @@ export function SessionCapacityView() {
   const [patientId, setPatientId] = useState("");
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
+  const [newService, setNewService] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [expanded, setExpanded] = useState<SessionKey | null>("am");
   const [refreshing, setRefreshing] = useState(false);
@@ -78,6 +80,7 @@ export function SessionCapacityView() {
         const created = await apiClient.post<{ id: string }>("/patients", {
           name: newName,
           phone: newPhone,
+          ...(newService.trim() ? { service: newService.trim() } : {}),
         });
         pid = created.id;
       }
@@ -92,6 +95,7 @@ export function SessionCapacityView() {
       setPatientId("");
       setNewName("");
       setNewPhone("");
+      setNewService("");
       await fetchAll();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Something went wrong");
@@ -147,10 +151,7 @@ export function SessionCapacityView() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
-          Date
-          <Input type="date" value={dateYmd} onChange={(e) => setDay(new Date(`${e.target.value}T00:00:00`))} />
-        </label>
+        <DateQuickNav day={day} onChange={setDay} />
         <Button
           type="button"
           variant="secondary"
@@ -263,6 +264,14 @@ export function SessionCapacityView() {
                   <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
                     Phone
                     <Input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} required />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                    Service (optional)
+                    <Input
+                      value={newService}
+                      onChange={(e) => setNewService(e.target.value)}
+                      placeholder="e.g. Cleaning, Extraction"
+                    />
                   </label>
                 </>
               )}

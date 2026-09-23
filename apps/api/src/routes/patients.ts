@@ -4,6 +4,7 @@ import { prisma } from "@confirmly/db";
 import { requireAuth } from "../auth/guard";
 import { patientsService, PatientPhoneTakenError } from "../services/patients";
 import { createAccessToken } from "../services/tokens";
+import { findUpcomingAppointment, PatientAlreadyBookedError } from "../services/patient-schedule";
 import { renderInviteToBookSms } from "../templates/sms";
 import type { SmsService } from "../services/sms";
 import type { Env } from "../env";
@@ -16,6 +17,15 @@ const patientBodySchema = z.object({
   scheduleDetails: z.string().optional(),
   nextSchedule: z.coerce.date().optional(),
   service: z.string().optional(),
+});
+
+const patientUpdateSchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  phone: z.string().trim().min(1).optional(),
+  service: z.string().trim().nullable().optional(),
+  scheduleType: z.string().nullable().optional(),
+  scheduleDetails: z.string().nullable().optional(),
+  nextSchedule: z.coerce.date().nullable().optional(),
 });
 
 export function registerPatientRoutes(app: FastifyInstance, smsService: SmsService, env: Env): void {
@@ -76,11 +86,39 @@ export function registerPatientRoutes(app: FastifyInstance, smsService: SmsServi
     return reply.send(patient);
   });
 
+  app.patch<{ Params: { id: string } }>("/patients/:id", async (request, reply) => {
+    const body = patientUpdateSchema.safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: "invalid_request", message: body.error.message });
+    }
+
+    const clinicId = request.staffUser!.clinicId;
+    const { service, ...rest } = body.data;
+    try {
+      const patient = await patientsService.updatePatient(clinicId, request.params.id, {
+        ...rest,
+        ...(service !== undefined ? { service: service || null } : {}),
+      });
+      if (!patient) {
+        return reply.code(404).send({ error: "not_found", message: "Patient not found" });
+      }
+      return reply.send(patient);
+    } catch (err) {
+      if (err instanceof PatientPhoneTakenError) {
+        return reply.code(409).send({ error: "phone_taken", message: err.message });
+      }
+      throw err;
+    }
+  });
+
   app.post<{ Params: { id: string } }>("/patients/:id/invite-to-book", async (request, reply) => {
     const clinicId = request.staffUser!.clinicId;
     const patient = await patientsService.getPatient(clinicId, request.params.id);
     if (!patient) {
       return reply.code(404).send({ error: "not_found", message: "Patient not found" });
+    }
+    if (await findUpcomingAppointment(prisma, clinicId, patient.id)) {
+      throw new PatientAlreadyBookedError();
     }
 
     const clinic = await prisma.clinic.findUniqueOrThrow({ where: { id: clinicId } });

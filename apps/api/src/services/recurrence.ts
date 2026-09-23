@@ -1,6 +1,7 @@
 import { prisma, type RecurrenceRule, type RecurrenceRuleType, type SessionOfDay } from "@confirmly/db";
 import { appointmentsService } from "./appointments";
 import { sessionsService } from "./sessions";
+import { assertNoUpcomingAppointment } from "./patient-schedule";
 
 export class ActiveRecurrenceExistsError extends Error {
   constructor() {
@@ -60,6 +61,9 @@ async function createRecurrenceRule(params: CreateRecurrenceRuleParams) {
   if (existingActive) {
     throw new ActiveRecurrenceExistsError();
   }
+
+  // Check before creating the rule so a rejected first booking doesn't leave an orphan rule.
+  await assertNoUpcomingAppointment(prisma, params.clinicId, params.patientId);
 
   const clinic = await prisma.clinic.findUniqueOrThrow({ where: { id: params.clinicId } });
 

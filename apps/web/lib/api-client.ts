@@ -2,10 +2,12 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export class ApiError extends Error {
   status: number;
+  code: string | undefined;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
     this.name = "ApiError";
   }
 }
@@ -27,7 +29,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({ message: response.statusText }));
-    throw new ApiError(response.status, body.message ?? "Request failed");
+    throw new ApiError(response.status, body.message ?? "Request failed", body.error);
   }
 
   if (response.status === 204) {

@@ -24,6 +24,7 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
   const toast = useToast();
   const [patientName, setPatientName] = useState("");
   const [patientPhone, setPatientPhone] = useState("");
+  const [service, setService] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [priorVisits, setPriorVisits] = useState<AppointmentDto[]>([]);
@@ -55,6 +56,7 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
       const patient = await apiClient.post<{ id: string }>("/patients", {
         name: patientName,
         phone: patientPhone,
+        ...(service.trim() ? { service: service.trim() } : {}),
       });
 
       await apiClient.post("/appointments", {
@@ -67,7 +69,9 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
       toast.success("Appointment booked.");
       onSaved();
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
+      if (err instanceof ApiError && err.code === "already_booked") {
+        toast.error(err.message);
+      } else if (err instanceof ApiError && err.status === 409) {
         toast.error("This slot was just booked by someone else. Pick another slot.");
       } else {
         toast.error(err instanceof ApiError ? err.message : "Something went wrong");
@@ -206,6 +210,14 @@ export function AppointmentForm({ startsAt, endsAt, existing, onClose, onSaved }
                   onChange={(e) => setPatientPhone(e.target.value)}
                   placeholder="+639171234567"
                   required
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+                Service (optional)
+                <Input
+                  value={service}
+                  onChange={(e) => setService(e.target.value)}
+                  placeholder="e.g. Cleaning, Extraction"
                 />
               </label>
               <label className="flex flex-col gap-1 text-sm font-medium text-neutral-700">

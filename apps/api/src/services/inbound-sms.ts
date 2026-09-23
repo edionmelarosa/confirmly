@@ -2,6 +2,7 @@ import { prisma, type Patient } from "@confirmly/db";
 import type { Env } from "../env";
 import type { SmsService } from "./sms";
 import { createAccessToken } from "./tokens";
+import { syncNextSchedule } from "./patient-schedule";
 import { slotFromAppointment, type WaitlistService } from "./waitlist";
 
 export interface InboundSmsParams {
@@ -66,6 +67,7 @@ export function createInboundSmsHandler(env: Env, smsService: SmsService, waitli
           where: { id: appointment.id },
           data: { status: "cancelled" },
         });
+        await syncNextSchedule(cancelled.id);
         await smsService.send({
           clinicId: patient.clinicId,
           to: phone,
